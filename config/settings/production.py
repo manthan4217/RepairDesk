@@ -1,0 +1,9 @@
+"""Production settings. Provide secrets through the process environment."""
+
+from .base import *  # noqa: F403
+
+DEBUG = False
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"

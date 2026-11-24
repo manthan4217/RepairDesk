@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}RepairDesk - Service &amp; Repair Management{% endblock %}
+
+{% block content %}
+<section class="rd-panel p-4 p-md-5 bg-white rounded shadow-sm">
+  <p class="rd-kicker text-uppercase fw-semibold text-primary mb-2">Service and repair management</p>
+  <h1 class="display-5 fw-bold text-dark mb-3">RepairDesk</h1>
+  <p class="lead text-secondary mb-4">
+    RepairDesk helps repair businesses register service requests, assign
+    technicians, track repairs, and keep a reliable service history through a single digital platform.
+  </p>
+
+  {% if user.is_authenticated %}
+    <div class="alert alert-success d-flex align-items-center mb-4">
+      <div>
+        <strong>Signed in as:</strong> {{ user.display_name|default:user.username }}
+        {% if user.is_administrator %}
+          <span class="badge bg-primary ms-2">Administrator</span>
+        {% else %}
+          <span class="badge bg-info text-dark ms-2">Technician</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row g-3">
+      {% if user.is_administrator %}
+        <div class="col-md-6">
+          <div class="card h-100 border">
+            <div class="card-body">
+              <h2 class="h5 card-title fw-bold">Shop Administration</h2>
+              <p class="card-text text-muted small">Manage staff users, roles, and administrative data.</p>
+              <a class="btn btn-outline-primary" href="{% url 'admin:index' %}">Open Django Admin</a>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+      <div class="col-md-6">
+        <div class="card h-100 border">
+          <div class="card-body">
+            <h2 class="h5 card-title fw-bold">My Account</h2>
+            <p class="card-text text-muted small">View your staff role and update contact information.</p>
+            <a class="btn btn-outline-secondary" href="{% url 'accounts:profile' %}">Manage Profile</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="p-4 bg-light rounded border mb-4">
+      <h2 class="h5 fw-bold mb-2">Staff Portal Access</h2>
+      <p class="text-muted small mb-3">
+        Sign in to access repair tickets, register customers, and update repair statuses.
+      </p>
+      <a class="btn btn-primary px-4 fw-semibold" href="{% url 'accounts:login' %}">Sign In to RepairDesk</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

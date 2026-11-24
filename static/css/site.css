@@ -1,0 +1,48 @@
+:root {
+  --rd-ink: #1c2430;
+  --rd-bar: #16324f;
+  --rd-panel: #ffffff;
+}
+
+body {
+  color: var(--rd-ink);
+  background: #f3f5f7;
+}
+
+.rd-header {
+  background: var(--rd-bar);
+}
+
+.rd-header .navbar {
+  background: transparent;
+}
+
+.skip-link:focus {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 20;
+  padding: 0.5rem 0.75rem;
+  background: #ffffff;
+}
+
+.rd-panel {
+  max-width: 42rem;
+  padding: 1.5rem;
+  background: var(--rd-panel);
+  border: 1px solid #dde3ea;
+  border-radius: 0.5rem;
+}
+
+.rd-kicker {
+  margin-bottom: 0.35rem;
+  color: #526173;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.rd-panel h1 {
+  margin-bottom: 0.75rem;
+  font-size: 2rem;
+}

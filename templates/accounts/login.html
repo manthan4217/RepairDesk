@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center my-4">
+  <div class="col-12 col-md-8 col-lg-5">
+    <div class="card shadow-sm border-0 rd-auth-card">
+      <div class="card-body p-4 p-md-5">
+        <div class="text-center mb-4">
+          <p class="rd-kicker mb-1">Service &amp; Repair Management</p>
+          <h1 class="h3 fw-bold text-dark">Sign In</h1>
+          <p class="text-muted small">Enter your staff credentials to access RepairDesk</p>
+        </div>
+
+        {% if form.errors %}
+          <div class="alert alert-danger alert-dismissible fade show small" role="alert">
+            <strong>Authentication failed:</strong> Please verify your username and password.
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'accounts:login' %}" novalidate>
+          {% csrf_token %}
+          {% if request.GET.next %}
+            <input type="hidden" name="next" value="{{ request.GET.next }}">
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="{{ form.username.id_for_label }}" class="form-label fw-semibold">Username</label>
+            {{ form.username }}
+            {% if form.username.errors %}
+              <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label for="{{ form.password.id_for_label }}" class="form-label fw-semibold">Password</label>
+            {{ form.password }}
+            {% if form.password.errors %}
+              <div class="text-danger small mt-1">{{ form.password.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">Sign In</button>
+        </form>
+
+        <div class="mt-4 pt-3 border-top text-center text-muted small">
+          <span>Need access or password reset? Contact your system administrator.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
