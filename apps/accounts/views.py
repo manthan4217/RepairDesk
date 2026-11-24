@@ -36,15 +36,12 @@ class UserLoginView(DjangoLoginView):
 
 
 class UserLogoutView(View):
-    """Logs out the active user and redirects home with a message."""
+    """Logs out the active user and redirects home with a message. Strictly POST-only to prevent CSRF logout."""
     def post(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             auth_logout(request)
             messages.info(request, "You have been signed out.")
         return redirect("home")
-
-    def get(self, request, *args, **kwargs):
-        return self.post(request, *args, **kwargs)
 
 
 class ProfileView(LoginRequiredMixin, FormView):

@@ -1,6 +1,7 @@
 """Management command to populate RepairDesk with demo accounts, customers, devices, and tickets."""
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.accounts.models import User
@@ -11,7 +12,20 @@ from apps.tickets.models import Assignment, RepairUpdate, ServiceTicket
 class Command(BaseCommand):
     help = "Populate the database with realistic demo accounts and sample service tickets."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Force seeding even if DEBUG is False in a non-development environment.",
+        )
+
     def handle(self, *args, **options):
+        if not settings.DEBUG and not options.get("force"):
+            raise CommandError(
+                "Security Safeguard: seed_demo_data cannot be executed when DEBUG=False "
+                "because it provisions default credentials. Use --force to override intentionally."
+            )
+
         with transaction.atomic():
             # 1. Administrator Account
             admin_user, admin_created = User.objects.get_or_create(

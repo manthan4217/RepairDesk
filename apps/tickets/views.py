@@ -1,16 +1,19 @@
 """Views for Service Ticket lifecycle, intake, technician assignments, repair notes, and completion reports."""
 
+import mimetypes
+import os
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views import View
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
-from apps.accounts.permissions import AdminRequiredMixin
+from apps.accounts.permissions import AdminRequiredMixin, admin_required
 from apps.customers.models import Customer, Device
 from .forms import (
     AttachmentUploadForm,
@@ -339,6 +342,8 @@ class CompletionReportCreateView(LoginRequiredMixin, CreateView):
     def dispatch(self, request, *args, **kwargs):
         ticket = self.get_ticket()
         check_ticket_access(ticket, request.user)
+        if ticket.status == ServiceTicket.Status.CANCELLED:
+            raise PermissionDenied("Cannot submit completion report for a cancelled ticket.")
         if hasattr(ticket, "completion_report"):
             messages.info(request, "This ticket already has a completion report.")
             return redirect(ticket.get_absolute_url())
@@ -423,11 +428,29 @@ class AttachmentDeleteView(LoginRequiredMixin, View):
         return redirect(ticket.get_absolute_url())
 
 
+class AttachmentDownloadView(LoginRequiredMixin, View):
+    """Securely streams ticket attachment files enforcing object-level authorization."""
+
+    def get(self, request, pk, *args, **kwargs):
+        attachment = get_object_or_404(Attachment, pk=pk)
+        check_ticket_access(attachment.ticket, request.user)
+
+        if not attachment.file or not os.path.exists(attachment.file.path):
+            raise Http404("Attachment file does not exist.")
+
+        content_type, _ = mimetypes.guess_type(attachment.file.path)
+        content_type = content_type or "application/octet-stream"
+
+        response = FileResponse(open(attachment.file.path, "rb"), content_type=content_type)
+        response["X-Content-Type-Options"] = "nosniff"
+        filename = os.path.basename(attachment.file.name)
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response
+
+
+@admin_required
 def customer_devices_json(request, customer_id):
     """Lightweight endpoint returning active devices belonging to a customer."""
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Unauthorized"}, status=401)
-
     devices = Device.objects.filter(customer_id=customer_id, is_active=True).values(
         "id", "brand", "model", "serial_number"
     )

@@ -23,6 +23,7 @@ urlpatterns = [
 
     # Attachments
     path("<int:pk>/attachments/upload/", views.AttachmentUploadView.as_view(), name="attachment_upload"),
+    path("attachments/<int:pk>/download/", views.AttachmentDownloadView.as_view(), name="attachment_download"),
     path("attachments/<int:pk>/delete/", views.AttachmentDeleteView.as_view(), name="attachment_delete"),
 
     # Async helper API

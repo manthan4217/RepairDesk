@@ -209,8 +209,12 @@
   </div>
 </div>
 
-<!-- Chart.js Script -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<!-- Chart.js Script with SRI and Crossorigin Integrity (SEC-08) -->
+<script
+  src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"
+  integrity="sha384-e6cc9LaIG7xZ3XD5B+jtr1NhTWPQGQdRCh6xiZ+ZFUtWCpg4ycv3Sh+SkZoopvUY"
+  crossorigin="anonymous"
+></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     const rawStatus = JSON.parse('{{ status_counts_json|escapejs }}');

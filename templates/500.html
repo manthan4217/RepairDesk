@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Server Error (500) - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center my-5">
+  <div class="col-12 col-md-8 col-lg-6 text-center">
+    <div class="card border-0 shadow-sm p-4 p-md-5">
+      <div class="mb-3">
+        <span class="badge bg-warning-subtle text-dark fs-6 px-3 py-2 rounded-pill">HTTP 500 Internal Error</span>
+      </div>
+      <h1 class="h3 fw-bold mb-3">Something Went Wrong</h1>
+      <p class="text-muted mb-4">
+        An unexpected error occurred while processing your request. The issue has been logged for administrative review.
+      </p>
+      <div>
+        <a href="{% url 'home' %}" class="btn btn-primary px-4">
+          Return to Home
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

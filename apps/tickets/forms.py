@@ -80,10 +80,9 @@ class TicketUpdateForm(forms.ModelForm):
 
     class Meta:
         model = ServiceTicket
-        fields = ["priority", "status", "issue_description", "estimated_cost"]
+        fields = ["priority", "issue_description", "estimated_cost"]
         widgets = {
             "priority": forms.Select(attrs={"class": "form-select"}),
-            "status": forms.Select(attrs={"class": "form-select"}),
             "issue_description": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
             "estimated_cost": forms.NumberInput(attrs={"class": "form-control", "step": "0.01"}),
         }
@@ -262,5 +261,19 @@ class AttachmentUploadForm(forms.ModelForm):
             max_bytes = self.MAX_FILE_SIZE_MB * 1024 * 1024
             if uploaded_file.size > max_bytes:
                 raise ValidationError(f"File size exceeds the {self.MAX_FILE_SIZE_MB}MB limit.")
+
+            # Validate binary magic bytes / signature
+            header = uploaded_file.read(16)
+            uploaded_file.seek(0)
+
+            is_jpeg = header.startswith(b"\xff\xd8\xff")
+            is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
+            is_webp = header.startswith(b"RIFF") and len(header) >= 12 and header[8:12] == b"WEBP"
+            is_pdf = header.startswith(b"%PDF-")
+
+            if not (is_jpeg or is_png or is_webp or is_pdf):
+                raise ValidationError(
+                    "Invalid file type or corrupt file header. Allowed file types: JPG, PNG, WEBP, PDF."
+                )
         return uploaded_file
 
