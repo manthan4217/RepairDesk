@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import CreateView, DetailView, FormView, ListView, UpdateView
 
+from apps.accounts.permissions import AdminRequiredMixin
 from apps.customers.models import Customer, Device
 from .forms import (
     AttachmentUploadForm,
@@ -31,7 +32,11 @@ def check_ticket_access(ticket, user):
 
 
 class TicketListView(LoginRequiredMixin, ListView):
-    """Filterable, paginated dashboard list of all service tickets."""
+    """Filterable, paginated dashboard list of service tickets.
+    
+    Administrators see all tickets across the shop.
+    Technicians see only tickets assigned to them.
+    """
     model = ServiceTicket
     template_name = "tickets/ticket_list.html"
     context_object_name = "tickets"
@@ -42,6 +47,9 @@ class TicketListView(LoginRequiredMixin, ListView):
             ServiceTicket.objects.select_related("customer", "device", "assigned_technician")
             .all()
         )
+        if not self.request.user.is_administrator:
+            queryset = queryset.filter(assigned_technician=self.request.user)
+
         q = self.request.GET.get("q", "").strip()
         status = self.request.GET.get("status", "").strip()
         priority = self.request.GET.get("priority", "").strip()
@@ -72,15 +80,19 @@ class TicketListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        base_qs = ServiceTicket.objects.all()
+        if not self.request.user.is_administrator:
+            base_qs = base_qs.filter(assigned_technician=self.request.user)
+
         context["filter_form"] = TicketFilterForm(self.request.GET)
-        context["total_tickets"] = ServiceTicket.objects.count()
-        context["in_progress_count"] = ServiceTicket.objects.filter(
+        context["total_tickets"] = base_qs.count()
+        context["in_progress_count"] = base_qs.filter(
             status__in=[ServiceTicket.Status.RECEIVED, ServiceTicket.Status.UNDER_DIAGNOSIS, ServiceTicket.Status.IN_PROGRESS]
         ).count()
-        context["completed_count"] = ServiceTicket.objects.filter(
+        context["completed_count"] = base_qs.filter(
             status__in=[ServiceTicket.Status.COMPLETED, ServiceTicket.Status.READY_FOR_DELIVERY, ServiceTicket.Status.DELIVERED]
         ).count()
-        context["unassigned_count"] = ServiceTicket.objects.filter(assigned_technician__isnull=True).count()
+        context["unassigned_count"] = 0 if not self.request.user.is_administrator else base_qs.filter(assigned_technician__isnull=True).count()
         return context
 
 
@@ -117,6 +129,12 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
     template_name = "tickets/ticket_detail.html"
     context_object_name = "ticket"
 
+    def get_object(self, queryset=None):
+        ticket = super().get_object(queryset=queryset)
+        if not (self.request.user.is_administrator or ticket.assigned_technician == self.request.user):
+            raise PermissionDenied("You do not have permission to access this ticket.")
+        return ticket
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         ticket = self.object
@@ -133,7 +151,7 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class TicketCreateView(LoginRequiredMixin, CreateView):
+class TicketCreateView(AdminRequiredMixin, CreateView):
     """Intake wizard to create a new service ticket."""
     model = ServiceTicket
     form_class = TicketCreateForm
@@ -193,7 +211,7 @@ class TicketCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class TicketUpdateView(LoginRequiredMixin, UpdateView):
+class TicketUpdateView(AdminRequiredMixin, UpdateView):
     """Edit ticket metadata, priority, status or estimated cost."""
     model = ServiceTicket
     form_class = TicketUpdateForm
@@ -211,7 +229,7 @@ class TicketUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
 
-class TicketAssignView(LoginRequiredMixin, FormView):
+class TicketAssignView(AdminRequiredMixin, FormView):
     """Assign or reassign a ticket to an active technician."""
     form_class = TicketAssignForm
     template_name = "tickets/ticket_assign.html"

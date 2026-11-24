@@ -20,14 +20,16 @@
       </div>
       <p class="text-muted small mb-0">Registered on {{ device.created_at|date:"M d, Y" }} &bull; Device ID: RD-DEV-{{ device.pk|stringformat:"04d" }}</p>
     </div>
-    <div class="d-flex gap-2">
-      <a href="{% url 'customers:device_update' device.pk %}" class="btn btn-outline-secondary">
-        Edit Device
-      </a>
-      <a href="{{ device.customer.get_absolute_url }}" class="btn btn-outline-primary">
-        View Owner Profile
-      </a>
-    </div>
+    {% if user.is_administrator %}
+      <div class="d-flex gap-2">
+        <a href="{% url 'customers:device_update' device.pk %}" class="btn btn-outline-secondary">
+          Edit Device
+        </a>
+        <a href="{{ device.customer.get_absolute_url }}" class="btn btn-outline-primary">
+          View Owner Profile
+        </a>
+      </div>
+    {% endif %}
   </div>
 </div>
 

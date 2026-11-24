@@ -475,3 +475,94 @@ class AttachmentTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(self.ticket.attachments.count(), 1)
+
+
+class TicketAdminViewsRBACSecurityTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username="admin_rbac", password="testpassword", role=User.Role.ADMINISTRATOR)
+        self.tech = User.objects.create_user(username="tech_rbac", password="testpassword", role=User.Role.TECHNICIAN)
+        self.customer = Customer.objects.create(name="RBAC Customer", phone="9988771122")
+        self.device = Device.objects.create(
+            customer=self.customer,
+            category=Device.Category.LAPTOP,
+            brand="Dell",
+            model="XPS 15",
+            customer_reported_issue="Keyboard issue",
+        )
+        self.ticket = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device,
+            created_by=self.admin,
+            assigned_technician=self.tech,
+            issue_description="Keyboard keys sticking",
+        )
+
+    def test_admin_can_access_ticket_intake_update_and_assign(self):
+        self.client.login(username="admin_rbac", password="testpassword")
+        self.assertEqual(self.client.get(reverse("tickets:ticket_create")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("tickets:ticket_update", kwargs={"pk": self.ticket.pk})).status_code, 200)
+        self.assertEqual(self.client.get(reverse("tickets:ticket_assign", kwargs={"pk": self.ticket.pk})).status_code, 200)
+
+    def test_technician_blocked_from_ticket_intake_update_and_assign(self):
+        self.client.login(username="tech_rbac", password="testpassword")
+        self.assertEqual(self.client.get(reverse("tickets:ticket_create")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("tickets:ticket_update", kwargs={"pk": self.ticket.pk})).status_code, 403)
+        self.assertEqual(self.client.get(reverse("tickets:ticket_assign", kwargs={"pk": self.ticket.pk})).status_code, 403)
+
+    def test_object_level_ticket_detail_access(self):
+        # Admin can view any ticket
+        self.client.login(username="admin_rbac", password="testpassword")
+        self.assertEqual(self.client.get(self.ticket.get_absolute_url()).status_code, 200)
+
+        # Assigned technician can view their assigned ticket
+        self.client.login(username="tech_rbac", password="testpassword")
+        self.assertEqual(self.client.get(self.ticket.get_absolute_url()).status_code, 200)
+
+        # Unassigned ticket -> technician gets 403 Forbidden
+        unassigned_ticket = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device,
+            created_by=self.admin,
+            issue_description="Unassigned job",
+        )
+        self.assertEqual(self.client.get(unassigned_ticket.get_absolute_url()).status_code, 403)
+
+        # Another technician accessing this ticket gets 403 Forbidden
+        other_tech = User.objects.create_user(username="tech_other", password="testpassword", role=User.Role.TECHNICIAN)
+        self.client.login(username="tech_other", password="testpassword")
+        self.assertEqual(self.client.get(self.ticket.get_absolute_url()).status_code, 403)
+
+        # Non-existent ticket returns 404
+        self.assertEqual(self.client.get(reverse("tickets:ticket_detail", kwargs={"pk": 99999})).status_code, 404)
+
+    def test_technician_specific_ticket_listing(self):
+        other_tech = User.objects.create_user(username="tech_second", password="testpassword", role=User.Role.TECHNICIAN)
+        other_ticket = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device,
+            created_by=self.admin,
+            assigned_technician=other_tech,
+            issue_description="Other tech ticket",
+        )
+        unassigned_ticket = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device,
+            created_by=self.admin,
+            issue_description="Unassigned ticket",
+        )
+
+        # Admin sees all tickets
+        self.client.login(username="admin_rbac", password="testpassword")
+        res_admin = self.client.get(reverse("tickets:ticket_list"))
+        self.assertEqual(res_admin.status_code, 200)
+        self.assertContains(res_admin, self.ticket.ticket_number)
+        self.assertContains(res_admin, other_ticket.ticket_number)
+        self.assertContains(res_admin, unassigned_ticket.ticket_number)
+
+        # Technician sees only their own assigned ticket
+        self.client.login(username="tech_rbac", password="testpassword")
+        res_tech = self.client.get(reverse("tickets:ticket_list"))
+        self.assertEqual(res_tech.status_code, 200)
+        self.assertContains(res_tech, self.ticket.ticket_number)
+        self.assertNotContains(res_tech, other_ticket.ticket_number)
+        self.assertNotContains(res_tech, unassigned_ticket.ticket_number)

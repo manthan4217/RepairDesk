@@ -185,10 +185,37 @@ class CustomerViewsTests(TestCase):
         self.customer.refresh_from_db()
         self.assertFalse(self.customer.is_active)
 
+    def test_technician_blocked_from_customer_operations(self):
+        User.objects.create_user(
+            username="tech_blocked",
+            password="testpassword123",
+            role=User.Role.TECHNICIAN,
+        )
+        self.client.login(username="tech_blocked", password="testpassword123")
+        # List view blocked
+        self.assertEqual(self.client.get(reverse("customers:customer_list")).status_code, 403)
+        # Detail view blocked
+        self.assertEqual(self.client.get(self.customer.get_absolute_url()).status_code, 403)
+        # Create view blocked
+        self.assertEqual(self.client.get(reverse("customers:customer_create")).status_code, 403)
+        # Update view blocked
+        self.assertEqual(
+            self.client.get(reverse("customers:customer_update", kwargs={"pk": self.customer.pk})).status_code, 403
+        )
+        # Toggle status blocked
+        self.assertEqual(
+            self.client.post(reverse("customers:customer_toggle_status", kwargs={"pk": self.customer.pk})).status_code, 403
+        )
+
 
 class DeviceViewsTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
+            username="admin_tester",
+            password="testpassword123",
+            role=User.Role.ADMINISTRATOR,
+        )
+        self.tech_user = User.objects.create_user(
             username="tech_tester",
             password="testpassword123",
             role=User.Role.TECHNICIAN,
@@ -208,14 +235,14 @@ class DeviceViewsTests(TestCase):
         )
 
     def test_device_list_view(self):
-        self.client.login(username="tech_tester", password="testpassword123")
+        self.client.login(username="admin_tester", password="testpassword123")
         response = self.client.get(reverse("customers:device_list"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Samsung Galaxy S22")
         self.assertContains(response, "David Miller")
 
     def test_device_search_filtering(self):
-        self.client.login(username="tech_tester", password="testpassword123")
+        self.client.login(username="admin_tester", password="testpassword123")
         # Search by serial number
         response = self.client.get(reverse("customers:device_list"), {"q": "SM-G901-XYZ"})
         self.assertEqual(response.status_code, 200)
@@ -227,7 +254,7 @@ class DeviceViewsTests(TestCase):
         self.assertNotContains(response_empty, "SM-G901-XYZ")
 
     def test_device_create_view(self):
-        self.client.login(username="tech_tester", password="testpassword123")
+        self.client.login(username="admin_tester", password="testpassword123")
         response = self.client.post(
             reverse("customers:device_create") + f"?customer={self.customer.pk}",
             {
@@ -248,7 +275,7 @@ class DeviceViewsTests(TestCase):
         self.assertContains(response, "ThinkPad T14")
 
     def test_device_detail_view(self):
-        self.client.login(username="tech_tester", password="testpassword123")
+        self.client.login(username="admin_tester", password="testpassword123")
         response = self.client.get(self.device.get_absolute_url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Samsung Galaxy S22")
@@ -257,7 +284,7 @@ class DeviceViewsTests(TestCase):
         self.assertContains(response, "Cracked screen glass")
 
     def test_device_update_view(self):
-        self.client.login(username="tech_tester", password="testpassword123")
+        self.client.login(username="admin_tester", password="testpassword123")
         response = self.client.post(
             reverse("customers:device_update", kwargs={"pk": self.device.pk}),
             {
@@ -276,3 +303,16 @@ class DeviceViewsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.device.refresh_from_db()
         self.assertEqual(self.device.model, "Galaxy S22 Ultra")
+
+    def test_technician_blocked_from_device_operations(self):
+        self.client.login(username="tech_tester", password="testpassword123")
+        # List view blocked
+        self.assertEqual(self.client.get(reverse("customers:device_list")).status_code, 403)
+        # Detail view blocked
+        self.assertEqual(self.client.get(self.device.get_absolute_url()).status_code, 403)
+        # Create view blocked
+        self.assertEqual(self.client.get(reverse("customers:device_create")).status_code, 403)
+        # Update view blocked
+        self.assertEqual(
+            self.client.get(reverse("customers:device_update", kwargs={"pk": self.device.pk})).status_code, 403
+        )

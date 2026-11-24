@@ -5,6 +5,8 @@ from django.shortcuts import redirect, render
 
 def home(request):
     if request.user.is_authenticated:
-        return redirect("dashboard:overview")
+        if request.user.is_administrator:
+            return redirect("dashboard:overview")
+        return redirect("tickets:my_jobs")
     return render(request, "home.html")
 

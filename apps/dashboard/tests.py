@@ -62,6 +62,11 @@ class DashboardOverviewTests(TestCase):
         self.assertEqual(context["in_progress_count"], 1)
         self.assertEqual(context["unassigned_count"], 0)
 
+    def test_technician_blocked_from_dashboard_overview(self):
+        self.client.login(username="tech_dan", password="testpassword")
+        response = self.client.get(reverse("dashboard:overview"))
+        self.assertEqual(response.status_code, 403)
+
 
 class GlobalSearchTests(TestCase):
     def setUp(self):
@@ -115,6 +120,12 @@ class GlobalSearchTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Stark Industries")
 
+    def test_technician_blocked_from_global_search(self):
+        tech = User.objects.create_user(username="tech_search", password="testpassword", role=User.Role.TECHNICIAN)
+        self.client.login(username="tech_search", password="testpassword")
+        response = self.client.get(reverse("dashboard:search"), {"q": "Stark"})
+        self.assertEqual(response.status_code, 403)
+
 
 class ReportsViewTests(TestCase):
     def setUp(self):
@@ -147,3 +158,9 @@ class ReportsViewTests(TestCase):
         context = response.context
         self.assertEqual(context["total_in_period"], 1)
         self.assertEqual(context["completed_in_period"], 1)
+
+    def test_technician_blocked_from_reports_view(self):
+        tech = User.objects.create_user(username="tech_rep", password="testpassword", role=User.Role.TECHNICIAN)
+        self.client.login(username="tech_rep", password="testpassword")
+        response = self.client.get(reverse("dashboard:reports"))
+        self.assertEqual(response.status_code, 403)

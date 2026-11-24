@@ -25,27 +25,29 @@
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             {% if user.is_authenticated %}
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'dashboard:overview' %}">Dashboard</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'tickets:ticket_list' %}">Tickets</a>
-              </li>
+              {% if user.is_administrator %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'dashboard:overview' %}">Dashboard</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'tickets:ticket_list' %}">Tickets</a>
+                </li>
+              {% endif %}
               {% if user.is_technician or user.is_administrator %}
                 <li class="nav-item">
                   <a class="nav-link" href="{% url 'tickets:my_jobs' %}">My Jobs</a>
                 </li>
               {% endif %}
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'customers:customer_list' %}">Customers</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'customers:device_list' %}">Devices</a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'dashboard:reports' %}">Reports</a>
-              </li>
               {% if user.is_administrator %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'customers:customer_list' %}">Customers</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'customers:device_list' %}">Devices</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'dashboard:reports' %}">Reports</a>
+                </li>
                 <li class="nav-item">
                   <a class="nav-link" href="{% url 'admin:index' %}">Django Admin</a>
                 </li>
@@ -57,7 +59,7 @@
             {% endif %}
           </ul>
 
-          {% if user.is_authenticated %}
+          {% if user.is_authenticated and user.is_administrator %}
             <form class="d-flex mx-lg-3 my-2 my-lg-0" style="max-width: 280px;" method="get" action="{% url 'dashboard:search' %}">
               <input class="form-control form-control-sm bg-dark text-white border-secondary" type="search" name="q" placeholder="Search ticket #, serial, client..." aria-label="Search">
             </form>

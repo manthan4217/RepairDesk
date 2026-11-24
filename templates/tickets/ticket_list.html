@@ -8,11 +8,13 @@
     <h1 class="h3 fw-bold mb-1">Service &amp; Repair Tickets</h1>
     <p class="text-muted small mb-0">Total Tickets: {{ total_tickets }} &bull; Active: {{ in_progress_count }} &bull; Unassigned: {{ unassigned_count }}</p>
   </div>
-  <div>
-    <a class="btn btn-primary" href="{% url 'tickets:ticket_create' %}">
-      + New Service Ticket
-    </a>
-  </div>
+  {% if user.is_administrator %}
+    <div>
+      <a class="btn btn-primary" href="{% url 'tickets:ticket_create' %}">
+        + New Service Ticket
+      </a>
+    </div>
+  {% endif %}
 </div>
 
 <div class="row g-3 mb-4">
@@ -88,15 +90,23 @@
               </a>
             </td>
             <td>
-              <a href="{{ ticket.customer.get_absolute_url }}" class="text-dark fw-semibold text-decoration-none">
-                {{ ticket.customer.name }}
-              </a>
+              {% if user.is_administrator %}
+                <a href="{{ ticket.customer.get_absolute_url }}" class="text-dark fw-semibold text-decoration-none">
+                  {{ ticket.customer.name }}
+                </a>
+              {% else %}
+                <span class="text-dark fw-semibold">{{ ticket.customer.name }}</span>
+              {% endif %}
               <span class="text-muted small d-block">{{ ticket.customer.phone }}</span>
             </td>
             <td>
-              <a href="{{ ticket.device.get_absolute_url }}" class="text-muted text-decoration-none">
-                {{ ticket.device.brand }} {{ ticket.device.model }}
-              </a>
+              {% if user.is_administrator %}
+                <a href="{{ ticket.device.get_absolute_url }}" class="text-muted text-decoration-none">
+                  {{ ticket.device.brand }} {{ ticket.device.model }}
+                </a>
+              {% else %}
+                <span class="text-muted">{{ ticket.device.brand }} {{ ticket.device.model }}</span>
+              {% endif %}
             </td>
             <td>
               {% if ticket.priority == 'urgent' %}
@@ -134,9 +144,13 @@
                   {{ ticket.assigned_technician.display_name|default:ticket.assigned_technician.username }}
                 </span>
               {% else %}
-                <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="badge bg-danger-subtle text-danger text-decoration-none border border-danger">
-                  + Assign Now
-                </a>
+                {% if user.is_administrator %}
+                  <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="badge bg-danger-subtle text-danger text-decoration-none border border-danger">
+                    + Assign Now
+                  </a>
+                {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary">Unassigned</span>
+                {% endif %}
               {% endif %}
             </td>
             <td>
@@ -145,7 +159,9 @@
             <td class="text-end">
               <div class="btn-group btn-group-sm">
                 <a href="{{ ticket.get_absolute_url }}" class="btn btn-outline-secondary">View</a>
-                <a href="{% url 'tickets:ticket_update' ticket.pk %}" class="btn btn-outline-secondary">Edit</a>
+                {% if user.is_administrator %}
+                  <a href="{% url 'tickets:ticket_update' ticket.pk %}" class="btn btn-outline-secondary">Edit</a>
+                {% endif %}
               </div>
             </td>
           </tr>
@@ -153,7 +169,9 @@
           <tr>
             <td colspan="8" class="text-center py-5 text-muted">
               <p class="mb-2">No service tickets found matching your query.</p>
-              <a href="{% url 'tickets:ticket_create' %}" class="btn btn-sm btn-primary">Create First Ticket</a>
+              {% if user.is_administrator %}
+                <a href="{% url 'tickets:ticket_create' %}" class="btn btn-sm btn-primary">Create First Ticket</a>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}

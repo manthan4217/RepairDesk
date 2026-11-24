@@ -184,3 +184,21 @@ class RolePermissionTests(TestCase):
         request_admin.user = self.admin_user
         response_admin = dummy_tech_view(request_admin)
         self.assertEqual(response_admin.status_code, 200)
+
+
+class HomeRedirectTests(TestCase):
+    def test_anonymous_user_home_renders(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_redirected_to_dashboard_from_home(self):
+        admin = User.objects.create_user(username="admin_home", password="testpassword", role=User.Role.ADMINISTRATOR)
+        self.client.login(username="admin_home", password="testpassword")
+        response = self.client.get("/")
+        self.assertRedirects(response, reverse("dashboard:overview"))
+
+    def test_technician_redirected_to_my_jobs_from_home(self):
+        tech = User.objects.create_user(username="tech_home", password="testpassword", role=User.Role.TECHNICIAN)
+        self.client.login(username="tech_home", password="testpassword")
+        response = self.client.get("/")
+        self.assertRedirects(response, reverse("tickets:my_jobs"))

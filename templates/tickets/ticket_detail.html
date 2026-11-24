@@ -59,12 +59,14 @@
           </a>
         {% endif %}
       {% endif %}
-      <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-outline-secondary">
-        {% if ticket.assigned_technician %}Reassign{% else %}Assign Tech{% endif %}
-      </a>
-      <a href="{% url 'tickets:ticket_update' ticket.pk %}" class="btn btn-outline-secondary">
-        Edit Ticket
-      </a>
+      {% if user.is_administrator %}
+        <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-outline-secondary">
+          {% if ticket.assigned_technician %}Reassign{% else %}Assign Tech{% endif %}
+        </a>
+        <a href="{% url 'tickets:ticket_update' ticket.pk %}" class="btn btn-outline-secondary">
+          Edit Ticket
+        </a>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -91,9 +93,11 @@
     <div class="card shadow-sm border-0 mb-4">
       <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
         <h2 class="h5 mb-0 fw-bold">Technician Assignment History ({{ assignments.count }})</h2>
-        <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-outline-primary">
-          Update Assignment
-        </a>
+        {% if user.is_administrator %}
+          <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-outline-primary">
+            Update Assignment
+          </a>
+        {% endif %}
       </div>
       <div class="card-body p-0">
         <div class="table-responsive">
@@ -134,9 +138,11 @@
                 <tr>
                   <td colspan="5" class="text-center py-4 text-muted">
                     <p class="mb-1">This ticket has not been assigned to a technician yet.</p>
-                    <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-primary">
-                      Assign Technician Now
-                    </a>
+                    {% if user.is_administrator %}
+                      <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-primary">
+                        Assign Technician Now
+                      </a>
+                    {% endif %}
                   </td>
                 </tr>
               {% endfor %}
@@ -353,9 +359,13 @@
       </div>
       <div class="card-body">
         <h3 class="h6 fw-bold mb-1">
-          <a href="{{ ticket.device.get_absolute_url }}" class="text-decoration-none text-dark">
-            {{ ticket.device.brand }} {{ ticket.device.model }}
-          </a>
+          {% if user.is_administrator %}
+            <a href="{{ ticket.device.get_absolute_url }}" class="text-decoration-none text-dark">
+              {{ ticket.device.brand }} {{ ticket.device.model }}
+            </a>
+          {% else %}
+            <span class="text-dark">{{ ticket.device.brand }} {{ ticket.device.model }}</span>
+          {% endif %}
         </h3>
         <span class="badge bg-light text-dark border mb-3">{{ ticket.device.get_category_display }}</span>
 
@@ -372,11 +382,13 @@
           <span class="small">{{ ticket.device.accessories_received|default:"None" }}</span>
         </div>
       </div>
-      <div class="card-footer bg-white py-2">
-        <a href="{{ ticket.device.get_absolute_url }}" class="btn btn-sm btn-outline-secondary w-100">
-          View Device Record
-        </a>
-      </div>
+      {% if user.is_administrator %}
+        <div class="card-footer bg-white py-2">
+          <a href="{{ ticket.device.get_absolute_url }}" class="btn btn-sm btn-outline-secondary w-100">
+            View Device Record
+          </a>
+        </div>
+      {% endif %}
     </div>
 
     <div class="card shadow-sm border-0 mb-4">
@@ -385,9 +397,13 @@
       </div>
       <div class="card-body">
         <h3 class="h6 fw-bold mb-1">
-          <a href="{{ ticket.customer.get_absolute_url }}" class="text-decoration-none text-dark">
-            {{ ticket.customer.name }}
-          </a>
+          {% if user.is_administrator %}
+            <a href="{{ ticket.customer.get_absolute_url }}" class="text-decoration-none text-dark">
+              {{ ticket.customer.name }}
+            </a>
+          {% else %}
+            <span class="text-dark">{{ ticket.customer.name }}</span>
+          {% endif %}
         </h3>
         <p class="mb-2 text-muted small"><strong>Phone:</strong> {{ ticket.customer.phone }}</p>
         {% if ticket.customer.email %}
@@ -397,11 +413,13 @@
           <p class="mb-0 text-muted small"><strong>Address:</strong> {{ ticket.customer.address }}</p>
         {% endif %}
       </div>
-      <div class="card-footer bg-white py-2">
-        <a href="{{ ticket.customer.get_absolute_url }}" class="btn btn-sm btn-outline-secondary w-100">
-          View Customer Profile
-        </a>
-      </div>
+      {% if user.is_administrator %}
+        <div class="card-footer bg-white py-2">
+          <a href="{{ ticket.customer.get_absolute_url }}" class="btn btn-sm btn-outline-secondary w-100">
+            View Customer Profile
+          </a>
+        </div>
+      {% endif %}
     </div>
 
     <div class="card shadow-sm border-0">
@@ -422,9 +440,11 @@
         {% else %}
           <div class="text-center py-2 text-muted">
             <p class="small mb-2 text-danger fw-semibold">No technician assigned yet.</p>
-            <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-primary">
-              Assign Now
-            </a>
+            {% if user.is_administrator %}
+              <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-primary">
+                Assign Now
+              </a>
+            {% endif %}
           </div>
         {% endif %}
       </div>

@@ -13,7 +13,7 @@ from .forms import CustomerForm, CustomerSearchForm, DeviceForm, DeviceSearchFor
 from .models import Customer, Device
 
 
-class CustomerListView(LoginRequiredMixin, ListView):
+class CustomerListView(AdminRequiredMixin, ListView):
     """Searchable, paginated list of customers."""
     model = Customer
     template_name = "customers/customer_list.html"
@@ -45,7 +45,7 @@ class CustomerListView(LoginRequiredMixin, ListView):
         return context
 
 
-class CustomerDetailView(LoginRequiredMixin, DetailView):
+class CustomerDetailView(AdminRequiredMixin, DetailView):
     """Detailed view for a customer and their registered equipment."""
     model = Customer
     template_name = "customers/customer_detail.html"
@@ -57,7 +57,7 @@ class CustomerDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-class CustomerCreateView(LoginRequiredMixin, CreateView):
+class CustomerCreateView(AdminRequiredMixin, CreateView):
     """Register a new customer."""
     model = Customer
     form_class = CustomerForm
@@ -74,7 +74,7 @@ class CustomerCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class CustomerUpdateView(LoginRequiredMixin, UpdateView):
+class CustomerUpdateView(AdminRequiredMixin, UpdateView):
     """Update an existing customer's contact information."""
     model = Customer
     form_class = CustomerForm
@@ -91,7 +91,7 @@ class CustomerUpdateView(LoginRequiredMixin, UpdateView):
         return context
 
 
-class CustomerToggleStatusView(LoginRequiredMixin, View):
+class CustomerToggleStatusView(AdminRequiredMixin, View):
     """Toggle customer between active and archived status."""
     def post(self, request, pk, *args, **kwargs):
         customer = get_object_or_404(Customer, pk=pk)
@@ -102,7 +102,7 @@ class CustomerToggleStatusView(LoginRequiredMixin, View):
         return redirect("customers:customer_detail", pk=customer.pk)
 
 
-class DeviceListView(LoginRequiredMixin, ListView):
+class DeviceListView(AdminRequiredMixin, ListView):
     """Searchable, paginated global registry of registered devices."""
     model = Device
     template_name = "customers/device_list.html"
@@ -135,14 +135,14 @@ class DeviceListView(LoginRequiredMixin, ListView):
         return context
 
 
-class DeviceDetailView(LoginRequiredMixin, DetailView):
+class DeviceDetailView(AdminRequiredMixin, DetailView):
     """Detailed view for a single device with intake details and customer info."""
     model = Device
     template_name = "customers/device_detail.html"
     context_object_name = "device"
 
 
-class DeviceCreateView(LoginRequiredMixin, CreateView):
+class DeviceCreateView(AdminRequiredMixin, CreateView):
     """Register a new device, optionally attached to a specific customer."""
     model = Device
     form_class = DeviceForm
@@ -181,7 +181,7 @@ class DeviceCreateView(LoginRequiredMixin, CreateView):
         return context
 
 
-class DeviceUpdateView(LoginRequiredMixin, UpdateView):
+class DeviceUpdateView(AdminRequiredMixin, UpdateView):
     """Update details of an existing device."""
     model = Device
     form_class = DeviceForm

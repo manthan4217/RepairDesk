@@ -10,13 +10,14 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
 
+from apps.accounts.permissions import AdminRequiredMixin
 from apps.customers.models import Customer, Device
 from apps.tickets.models import CompletionReport, RepairUpdate, ServiceTicket, StatusHistory
 
 User = get_user_model()
 
 
-class DashboardOverviewView(LoginRequiredMixin, TemplateView):
+class DashboardOverviewView(AdminRequiredMixin, TemplateView):
     """Main Operational Overview Dashboard with real-time shop metrics."""
     template_name = "dashboard/overview.html"
 
@@ -98,8 +99,8 @@ class DashboardOverviewView(LoginRequiredMixin, TemplateView):
         return context
 
 
-class GlobalSearchView(LoginRequiredMixin, View):
-    """Unified search matching across Tickets, Customers, and Equipment."""
+class GlobalSearchView(AdminRequiredMixin, View):
+    """Unified search matching across Tickets, Customers, and Equipment (Admin only)."""
     template_name = "dashboard/global_search.html"
 
     def get(self, request, *args, **kwargs):
@@ -154,7 +155,7 @@ class GlobalSearchView(LoginRequiredMixin, View):
         )
 
 
-class ReportsView(LoginRequiredMixin, TemplateView):
+class ReportsView(AdminRequiredMixin, TemplateView):
     """Operational Reports view with date filters and productivity analytics."""
     template_name = "dashboard/reports.html"
 

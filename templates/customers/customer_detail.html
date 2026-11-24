@@ -23,14 +23,16 @@
       </div>
       <p class="text-muted small mb-0">Customer ID: RD-CUST-{{ customer.pk|stringformat:"04d" }} &bull; Registered on {{ customer.created_at|date:"M d, Y" }}</p>
     </div>
-    <div class="d-flex gap-2">
-      <a href="{% url 'customers:customer_update' customer.pk %}" class="btn btn-outline-secondary">
-        Edit Customer
-      </a>
-      <a href="{% url 'customers:device_create' %}?customer={{ customer.pk }}" class="btn btn-primary">
-        + Register Device
-      </a>
-    </div>
+    {% if user.is_administrator %}
+      <div class="d-flex gap-2">
+        <a href="{% url 'customers:customer_update' customer.pk %}" class="btn btn-outline-secondary">
+          Edit Customer
+        </a>
+        <a href="{% url 'customers:device_create' %}?customer={{ customer.pk }}" class="btn btn-primary">
+          + Register Device
+        </a>
+      </div>
+    {% endif %}
   </div>
 </div>
 
