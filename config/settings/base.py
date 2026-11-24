@@ -81,10 +81,14 @@ else:
             "PORT": env("DB_PORT", default=3306),
             "OPTIONS": {
                 "charset": "utf8mb4",
-                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                "init_command": (
+                    "SET sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO'"
+                ),
             },
         }
     }
+
+CONN_MAX_AGE = env.int("CONN_MAX_AGE", default=60)
 
 AUTH_USER_MODEL = "accounts.User"
 

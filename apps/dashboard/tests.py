@@ -130,6 +130,7 @@ class GlobalSearchTests(TestCase):
 class ReportsViewTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(username="report_admin", password="testpassword", role=User.Role.ADMINISTRATOR)
+        self.tech = User.objects.create_user(username="report_tech", password="testpassword", role=User.Role.TECHNICIAN)
         self.customer = Customer.objects.create(name="Report Client", phone="9990001111")
         self.device = Device.objects.create(
             customer=self.customer,
@@ -142,7 +143,7 @@ class ReportsViewTests(TestCase):
             customer=self.customer,
             device=self.device,
             created_by=self.admin,
-            assigned_technician=self.admin,
+            assigned_technician=self.tech,
             status=ServiceTicket.Status.COMPLETED,
             issue_description="Battery replaced",
         )

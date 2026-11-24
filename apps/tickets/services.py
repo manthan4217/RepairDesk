@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 
-def generate_ticket_number():
+def generate_ticket_number(extra_offset=0):
     """Generates a collision-safe, sequential human-readable ticket number.
     Format: RD-YYYY-XXXXX (e.g., RD-2026-00001)
     """
@@ -23,11 +23,11 @@ def generate_ticket_number():
         if last_ticket:
             try:
                 last_seq = int(last_ticket.ticket_number.split("-")[-1])
-                new_seq = last_seq + 1
+                new_seq = last_seq + 1 + extra_offset
             except (ValueError, IndexError):
-                new_seq = ServiceTicket.objects.filter(ticket_number__startswith=prefix).count() + 1
+                new_seq = ServiceTicket.objects.filter(ticket_number__startswith=prefix).count() + 1 + extra_offset
         else:
-            new_seq = 1
+            new_seq = 1 + extra_offset
 
         candidate = f"{prefix}{new_seq:05d}"
         while ServiceTicket.objects.filter(ticket_number=candidate).exists():

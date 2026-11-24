@@ -119,7 +119,6 @@ class Device(models.Model):
         verbose_name_plural = "Devices"
         indexes = [
             models.Index(fields=["brand", "model"], name="device_brand_model_idx"),
-            models.Index(fields=["serial_number"], name="device_serial_idx"),
         ]
 
     def __str__(self):

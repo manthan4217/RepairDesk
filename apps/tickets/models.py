@@ -4,7 +4,7 @@ import os
 import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models, transaction
 from django.urls import reverse
 
@@ -94,6 +94,7 @@ class ServiceTicket(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
+        validators=[MinValueValidator(0)],
         help_text="Preliminary price estimate provided to customer (if applicable).",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -107,6 +108,31 @@ class ServiceTicket(models.Model):
             models.Index(fields=["status", "priority"], name="ticket_status_priority_idx"),
             models.Index(fields=["created_at"], name="ticket_created_idx"),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=[
+                        "received",
+                        "under_diagnosis",
+                        "in_progress",
+                        "on_hold",
+                        "completed",
+                        "ready_for_delivery",
+                        "delivered",
+                        "cancelled",
+                    ]
+                ),
+                name="ticket_status_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(priority__in=["low", "normal", "high", "urgent"]),
+                name="ticket_priority_valid",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(estimated_cost__gte=0) | models.Q(estimated_cost__isnull=True),
+                name="ticket_estimated_cost_non_negative",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.ticket_number} - {self.device.brand} {self.device.model} ({self.get_status_display()})"
@@ -119,10 +145,21 @@ class ServiceTicket(models.Model):
                     {"device": f"The device '{self.device.brand} {self.device.model}' does not belong to {self.customer.name}."}
                 )
 
-        if self.assigned_technician_id and not self.assigned_technician.is_active:
-            raise ValidationError(
-                {"assigned_technician": f"Cannot assign ticket to '{self.assigned_technician.username}' because this technician account is inactive."}
-            )
+        if self.assigned_technician_id:
+            if not self.assigned_technician.is_active:
+                raise ValidationError(
+                    {"assigned_technician": f"Cannot assign ticket to '{self.assigned_technician.username}' because this technician account is inactive."}
+                )
+            if not self.assigned_technician.is_technician:
+                raise ValidationError(
+                    {"assigned_technician": f"User '{self.assigned_technician.username}' is not a designated technician."}
+                )
+
+        if self.status in [self.Status.READY_FOR_DELIVERY, self.Status.DELIVERED]:
+            if not (self.pk and hasattr(self, "completion_report")):
+                raise ValidationError(
+                    {"status": "A ticket cannot be marked Ready for Delivery or Closed without an approved Completion Report."}
+                )
 
     def save(self, *args, **kwargs):
         if not self.ticket_number:
@@ -135,21 +172,25 @@ class ServiceTicket(models.Model):
         return reverse("tickets:ticket_detail", kwargs={"pk": self.pk})
 
     def assign_to(self, technician, assigned_by, notes=""):
-        """Assigns the ticket to a technician and logs in assignment history."""
+        """Assigns the ticket to a technician and logs in assignment history with row lock."""
         if not technician.is_active:
             raise ValidationError(f"Cannot assign job to inactive user: {technician.username}")
+        if not technician.is_technician:
+            raise ValidationError(f"User '{technician.username}' is not a designated technician.")
 
         with transaction.atomic():
-            self.assignments.filter(is_current=True).update(is_current=False)
+            locked_ticket = ServiceTicket.objects.select_for_update().get(pk=self.pk)
+            locked_ticket.assignments.filter(is_current=True).update(is_current=False)
             Assignment.objects.create(
-                ticket=self,
+                ticket=locked_ticket,
                 technician=technician,
                 assigned_by=assigned_by,
                 notes=notes,
                 is_current=True,
             )
+            locked_ticket.assigned_technician = technician
+            locked_ticket.save(update_fields=["assigned_technician", "updated_at"])
             self.assigned_technician = technician
-            self.save(update_fields=["assigned_technician", "updated_at"])
 
     def can_transition_to(self, new_status):
         """Checks if transitioning from current status to new_status is permitted."""
@@ -159,7 +200,7 @@ class ServiceTicket(models.Model):
         return new_status in allowed
 
     def update_status(self, new_status, user, reason=""):
-        """Updates ticket status, enforces lifecycle rules, and records in StatusHistory."""
+        """Updates ticket status, enforces lifecycle rules, and records in StatusHistory with row lock."""
         if new_status == self.status:
             return
 
@@ -177,17 +218,19 @@ class ServiceTicket(models.Model):
                 )
 
         with transaction.atomic():
-            old_status = self.status
-            self.status = new_status
-            self.save(update_fields=["status", "updated_at"])
+            locked_ticket = ServiceTicket.objects.select_for_update().get(pk=self.pk)
+            old_status = locked_ticket.status
+            locked_ticket.status = new_status
+            locked_ticket.save(update_fields=["status", "updated_at"])
 
             StatusHistory.objects.create(
-                ticket=self,
+                ticket=locked_ticket,
                 old_status=old_status,
                 new_status=new_status,
                 changed_by=user,
                 reason=reason,
             )
+            self.status = new_status
 
 
 class Assignment(models.Model):

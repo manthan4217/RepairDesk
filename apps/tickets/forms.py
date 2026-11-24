@@ -105,7 +105,9 @@ class TicketAssignForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["technician"].queryset = User.objects.filter(is_active=True).order_by("display_name", "username")
+        self.fields["technician"].queryset = User.objects.filter(
+            is_active=True, role=User.Role.TECHNICIAN
+        ).order_by("display_name", "username")
 
 
 class TicketFilterForm(forms.Form):

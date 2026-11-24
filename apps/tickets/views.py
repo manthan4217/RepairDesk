@@ -6,6 +6,7 @@ import os
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -203,9 +204,20 @@ class TicketCreateView(AdminRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.created_by = self.request.user
-        ticket = form.save()
-        messages.success(self.request, f"Service Ticket {ticket.ticket_number} created successfully.")
-        return redirect(ticket.get_absolute_url())
+        from django.db import IntegrityError
+
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                with transaction.atomic():
+                    ticket = form.save()
+                messages.success(self.request, f"Service Ticket {ticket.ticket_number} created successfully.")
+                return redirect(ticket.get_absolute_url())
+            except IntegrityError:
+                if attempt < max_attempts - 1:
+                    form.instance.ticket_number = None  # regenerate candidate on collision
+                    continue
+                raise
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -351,28 +363,29 @@ class CompletionReportCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         ticket = self.get_ticket()
-        form.instance.ticket = ticket
-        form.instance.technician = self.request.user
-        form.save()
+        with transaction.atomic():
+            form.instance.ticket = ticket
+            form.instance.technician = self.request.user
+            form.save()
 
-        try:
-            ticket.update_status(
-                new_status=ServiceTicket.Status.COMPLETED,
-                user=self.request.user,
-                reason="Repair completed and completion report submitted.",
-            )
-        except ValidationError:
-            old_status = ticket.status
-            ticket.status = ServiceTicket.Status.COMPLETED
-            ticket.save(update_fields=["status", "updated_at"])
-            from .models import StatusHistory
-            StatusHistory.objects.create(
-                ticket=ticket,
-                old_status=old_status,
-                new_status=ServiceTicket.Status.COMPLETED,
-                changed_by=self.request.user,
-                reason="Completion report submitted and signed.",
-            )
+            try:
+                ticket.update_status(
+                    new_status=ServiceTicket.Status.COMPLETED,
+                    user=self.request.user,
+                    reason="Repair completed and completion report submitted.",
+                )
+            except ValidationError:
+                old_status = ticket.status
+                ticket.status = ServiceTicket.Status.COMPLETED
+                ticket.save(update_fields=["status", "updated_at"])
+                from .models import StatusHistory
+                StatusHistory.objects.create(
+                    ticket=ticket,
+                    old_status=old_status,
+                    new_status=ServiceTicket.Status.COMPLETED,
+                    changed_by=self.request.user,
+                    reason="Completion report submitted and signed.",
+                )
 
         messages.success(self.request, f"Completion report for {ticket.ticket_number} submitted successfully.")
         return redirect(ticket.get_absolute_url())
