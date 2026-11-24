@@ -2,12 +2,13 @@
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.customers.models import Customer, Device
-from .forms import CompletionReportForm, RepairUpdateForm, StatusTransitionForm, TicketCreateForm
-from .models import Assignment, CompletionReport, RepairUpdate, ServiceTicket, StatusHistory
+from .forms import AttachmentUploadForm, CompletionReportForm, RepairUpdateForm, StatusTransitionForm, TicketCreateForm
+from .models import Assignment, Attachment, CompletionReport, RepairUpdate, ServiceTicket, StatusHistory
 from .services import generate_ticket_number
 
 User = get_user_model()
@@ -322,3 +323,155 @@ class TechnicianWorkspaceViewsTests(TestCase):
             },
         )
         self.assertEqual(response.status_code, 403)
+
+
+class AttachmentTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="admin_user",
+            password="testpassword",
+            role=User.Role.ADMINISTRATOR,
+        )
+        self.tech_alice = User.objects.create_user(
+            username="tech_alice",
+            password="testpassword",
+            role=User.Role.TECHNICIAN,
+        )
+        self.tech_bob = User.objects.create_user(
+            username="tech_bob",
+            password="testpassword",
+            role=User.Role.TECHNICIAN,
+        )
+        self.customer = Customer.objects.create(name="Attachment Customer", phone="9988776655")
+        self.device = Device.objects.create(
+            customer=self.customer,
+            category=Device.Category.SMARTPHONE,
+            brand="Samsung",
+            model="Galaxy S22",
+        )
+        self.ticket = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device,
+            assigned_technician=self.tech_alice,
+            created_by=self.admin,
+            issue_description="Inspect cracked camera lens",
+        )
+
+    def test_attachment_properties_and_upload_success(self):
+        self.client.login(username="tech_alice", password="testpassword")
+        test_file = SimpleUploadedFile(
+            "lens_damage.jpg",
+            b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00",
+            content_type="image/jpeg",
+        )
+        response = self.client.post(
+            reverse("tickets:attachment_upload", kwargs={"pk": self.ticket.pk}),
+            {
+                "file": test_file,
+                "caption": "Cracked back camera lens photo",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.ticket.attachments.count(), 1)
+        att = self.ticket.attachments.first()
+        self.assertEqual(att.uploaded_by, self.tech_alice)
+        self.assertEqual(att.caption, "Cracked back camera lens photo")
+        self.assertTrue(att.is_image)
+        self.assertContains(response, "Cracked back camera lens photo")
+
+    def test_attachment_upload_pdf_document(self):
+        self.client.login(username="tech_alice", password="testpassword")
+        pdf_file = SimpleUploadedFile(
+            "diagnostic_report.pdf",
+            b"%PDF-1.4 test dummy content",
+            content_type="application/pdf",
+        )
+        response = self.client.post(
+            reverse("tickets:attachment_upload", kwargs={"pk": self.ticket.pk}),
+            {
+                "file": pdf_file,
+                "caption": "Hardware test result PDF",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        att = self.ticket.attachments.first()
+        self.assertFalse(att.is_image)
+        self.assertContains(response, "Hardware test result PDF")
+
+    def test_attachment_upload_disallowed_extension(self):
+        self.client.login(username="tech_alice", password="testpassword")
+        script_file = SimpleUploadedFile(
+            "malicious.exe",
+            b"MZ executable content",
+            content_type="application/octet-stream",
+        )
+        response = self.client.post(
+            reverse("tickets:attachment_upload", kwargs={"pk": self.ticket.pk}),
+            {
+                "file": script_file,
+                "caption": "Executable file",
+            },
+            follow=True,
+        )
+        self.assertEqual(self.ticket.attachments.count(), 0)
+
+    def test_attachment_upload_size_limit_form_validation(self):
+        # 6MB dummy content exceeds 5MB limit
+        large_file = SimpleUploadedFile(
+            "large_file.png",
+            b"0" * (6 * 1024 * 1024),
+            content_type="image/png",
+        )
+        form = AttachmentUploadForm(files={"file": large_file}, data={"caption": "Big file"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("file", form.errors)
+        self.assertIn("File size exceeds the 5MB limit.", form.errors["file"][0])
+
+    def test_attachment_delete_by_uploader(self):
+        test_file = SimpleUploadedFile("delete_me.png", b"test", content_type="image/png")
+        att = Attachment.objects.create(
+            ticket=self.ticket,
+            uploaded_by=self.tech_alice,
+            file=test_file,
+            caption="Temporary upload",
+        )
+        self.client.login(username="tech_alice", password="testpassword")
+        response = self.client.post(
+            reverse("tickets:attachment_delete", kwargs={"pk": att.pk}),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.ticket.attachments.count(), 0)
+
+    def test_attachment_delete_by_admin(self):
+        test_file = SimpleUploadedFile("delete_by_admin.png", b"test", content_type="image/png")
+        att = Attachment.objects.create(
+            ticket=self.ticket,
+            uploaded_by=self.tech_alice,
+            file=test_file,
+            caption="Tech upload deleted by admin",
+        )
+        self.client.login(username="admin_user", password="testpassword")
+        response = self.client.post(
+            reverse("tickets:attachment_delete", kwargs={"pk": att.pk}),
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.ticket.attachments.count(), 0)
+
+    def test_attachment_delete_blocked_for_other_technician(self):
+        test_file = SimpleUploadedFile("protected.png", b"test", content_type="image/png")
+        att = Attachment.objects.create(
+            ticket=self.ticket,
+            uploaded_by=self.tech_alice,
+            file=test_file,
+            caption="Alice file",
+        )
+        self.client.login(username="tech_bob", password="testpassword")
+        response = self.client.post(
+            reverse("tickets:attachment_delete", kwargs={"pk": att.pk}),
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.ticket.attachments.count(), 1)

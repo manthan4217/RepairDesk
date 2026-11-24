@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
 from apps.customers.models import Customer, Device
-from .models import CompletionReport, RepairUpdate, ServiceTicket
+from .models import Attachment, CompletionReport, RepairUpdate, ServiceTicket
 
 User = get_user_model()
 
@@ -241,3 +241,26 @@ class CompletionReportForm(forms.ModelForm):
                 }
             ),
         }
+
+
+class AttachmentUploadForm(forms.ModelForm):
+    """Form to upload photos or PDF documentation attached to a ticket."""
+
+    MAX_FILE_SIZE_MB = 5
+
+    class Meta:
+        model = Attachment
+        fields = ["file", "caption"]
+        widgets = {
+            "file": forms.FileInput(attrs={"class": "form-control", "accept": ".jpg,.jpeg,.png,.webp,.pdf"}),
+            "caption": forms.TextInput(attrs={"class": "form-control", "placeholder": "e.g. Intake damage photo, screen crack, diagnostic log"}),
+        }
+
+    def clean_file(self):
+        uploaded_file = self.cleaned_data.get("file")
+        if uploaded_file:
+            max_bytes = self.MAX_FILE_SIZE_MB * 1024 * 1024
+            if uploaded_file.size > max_bytes:
+                raise ValidationError(f"File size exceeds the {self.MAX_FILE_SIZE_MB}MB limit.")
+        return uploaded_file
+

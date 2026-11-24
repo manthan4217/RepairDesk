@@ -1,7 +1,7 @@
 """Django Admin registration for Service Tickets, Assignments, Notes, and Completion Reports."""
 
 from django.contrib import admin
-from .models import Assignment, CompletionReport, RepairUpdate, ServiceTicket, StatusHistory
+from .models import Assignment, Attachment, CompletionReport, RepairUpdate, ServiceTicket, StatusHistory
 
 
 class AssignmentInline(admin.TabularInline):
@@ -25,6 +25,12 @@ class StatusHistoryInline(admin.TabularInline):
     can_delete = False
 
 
+class AttachmentInline(admin.TabularInline):
+    model = Attachment
+    extra = 0
+    readonly_fields = ("uploaded_by", "created_at")
+
+
 @admin.register(ServiceTicket)
 class ServiceTicketAdmin(admin.ModelAdmin):
     list_display = (
@@ -46,7 +52,7 @@ class ServiceTicketAdmin(admin.ModelAdmin):
         "device__serial_number",
     )
     readonly_fields = ("ticket_number", "created_by", "created_at", "updated_at")
-    inlines = [AssignmentInline, RepairUpdateInline, StatusHistoryInline]
+    inlines = [AssignmentInline, RepairUpdateInline, StatusHistoryInline, AttachmentInline]
 
 
 @admin.register(Assignment)
@@ -78,3 +84,12 @@ class CompletionReportAdmin(admin.ModelAdmin):
     list_display = ("ticket", "technician", "completed_at")
     search_fields = ("ticket__ticket_number", "technician__username", "diagnosis_summary", "work_performed")
     readonly_fields = ("completed_at",)
+
+
+@admin.register(Attachment)
+class AttachmentAdmin(admin.ModelAdmin):
+    list_display = ("ticket", "caption", "uploaded_by", "created_at")
+    list_filter = ("created_at",)
+    search_fields = ("ticket__ticket_number", "caption", "uploaded_by__username")
+    readonly_fields = ("created_at",)
+

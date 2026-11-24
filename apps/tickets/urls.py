@@ -21,6 +21,10 @@ urlpatterns = [
     path("<int:pk>/status/", views.TicketStatusTransitionView.as_view(), name="ticket_status_update"),
     path("<int:pk>/complete/", views.CompletionReportCreateView.as_view(), name="completion_report_create"),
 
+    # Attachments
+    path("<int:pk>/attachments/upload/", views.AttachmentUploadView.as_view(), name="attachment_upload"),
+    path("attachments/<int:pk>/delete/", views.AttachmentDeleteView.as_view(), name="attachment_delete"),
+
     # Async helper API
     path("api/customer-devices/<int:customer_id>/", views.customer_devices_json, name="customer_devices_api"),
 ]

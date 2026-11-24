@@ -1,7 +1,10 @@
 """Models for Service Tickets, Technician Assignments, Repair Updates, and Completion Reports."""
 
+import os
+import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
 from django.db import models, transaction
 from django.urls import reverse
 
@@ -332,3 +335,52 @@ class CompletionReport(models.Model):
 
     def __str__(self):
         return f"Completion Report for {self.ticket.ticket_number} ({self.technician.username})"
+
+
+def ticket_attachment_upload_path(instance, filename):
+    """Generates a secure, collision-safe path for uploaded ticket attachments."""
+    ext = os.path.splitext(filename)[1].lower()
+    unique_filename = f"{uuid.uuid4().hex}{ext}"
+    return os.path.join("ticket_attachments", instance.ticket.ticket_number, unique_filename)
+
+
+class Attachment(models.Model):
+    """Uploaded photos or documents (intake damage photos, schematics, logs) for a ticket."""
+
+    ALLOWED_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "pdf"]
+
+    ticket = models.ForeignKey(
+        ServiceTicket,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="uploaded_attachments",
+    )
+    file = models.FileField(
+        upload_to=ticket_attachment_upload_path,
+        validators=[FileExtensionValidator(allowed_extensions=ALLOWED_EXTENSIONS)],
+        help_text="Upload an inspection image (JPG, PNG, WEBP) or PDF log. Max 5MB.",
+    )
+    caption = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Optional description (e.g. 'Intake cracked screen photo', 'Thermal test report')",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Attachment"
+        verbose_name_plural = "Attachments"
+
+    def __str__(self):
+        return f"{self.caption or self.file.name} ({self.ticket.ticket_number})"
+
+    @property
+    def is_image(self):
+        ext = os.path.splitext(self.file.name)[1].lower()
+        return ext in [".jpg", ".jpeg", ".png", ".webp"]
+

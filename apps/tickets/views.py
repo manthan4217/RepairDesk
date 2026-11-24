@@ -12,6 +12,7 @@ from django.views.generic import CreateView, DetailView, FormView, ListView, Upd
 
 from apps.customers.models import Customer, Device
 from .forms import (
+    AttachmentUploadForm,
     CompletionReportForm,
     RepairUpdateForm,
     StatusTransitionForm,
@@ -20,7 +21,7 @@ from .forms import (
     TicketFilterForm,
     TicketUpdateForm,
 )
-from .models import CompletionReport, RepairUpdate, ServiceTicket
+from .models import Attachment, CompletionReport, RepairUpdate, ServiceTicket
 
 
 def check_ticket_access(ticket, user):
@@ -122,7 +123,9 @@ class TicketDetailView(LoginRequiredMixin, DetailView):
         context["assignments"] = ticket.assignments.select_related("technician", "assigned_by").all()
         context["updates"] = ticket.updates.select_related("author").all()
         context["status_history"] = ticket.status_history.select_related("changed_by").all()
+        context["attachments"] = ticket.attachments.select_related("uploaded_by").all()
         context["assign_form"] = TicketAssignForm()
+        context["attachment_form"] = AttachmentUploadForm()
         context["can_modify"] = (
             self.request.user.is_administrator or ticket.assigned_technician == self.request.user
         )
@@ -329,7 +332,6 @@ class CompletionReportCreateView(LoginRequiredMixin, CreateView):
         form.instance.technician = self.request.user
         form.save()
 
-        # Concurrently transition status to COMPLETED
         try:
             ticket.update_status(
                 new_status=ServiceTicket.Status.COMPLETED,
@@ -356,6 +358,51 @@ class CompletionReportCreateView(LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context["ticket"] = self.get_ticket()
         return context
+
+
+class AttachmentUploadView(LoginRequiredMixin, CreateView):
+    """Handles uploading photos or documents attached to a ticket."""
+    model = Attachment
+    form_class = AttachmentUploadForm
+
+    def get_ticket(self):
+        return get_object_or_404(ServiceTicket, pk=self.kwargs["pk"])
+
+    def dispatch(self, request, *args, **kwargs):
+        ticket = self.get_ticket()
+        check_ticket_access(ticket, request.user)
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        ticket = self.get_ticket()
+        form.instance.ticket = ticket
+        form.instance.uploaded_by = self.request.user
+        form.save()
+        messages.success(self.request, "Attachment uploaded successfully.")
+        return redirect(ticket.get_absolute_url())
+
+    def form_invalid(self, form):
+        ticket = self.get_ticket()
+        for error in form.errors.values():
+            messages.error(self.request, error.as_text())
+        return redirect(ticket.get_absolute_url())
+
+
+class AttachmentDeleteView(LoginRequiredMixin, View):
+    """Allows uploader or administrator to remove an attachment."""
+    def post(self, request, pk, *args, **kwargs):
+        attachment = get_object_or_404(Attachment, pk=pk)
+        ticket = attachment.ticket
+
+        if not (request.user.is_administrator or attachment.uploaded_by == request.user):
+            raise PermissionDenied("You do not have permission to delete this attachment.")
+
+        if attachment.file:
+            attachment.file.delete(save=False)
+        attachment.delete()
+
+        messages.info(request, "Attachment deleted.")
+        return redirect(ticket.get_absolute_url())
 
 
 def customer_devices_json(request, customer_id):
