@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-10 col-lg-8">
+    <div class="mb-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{% url 'customers:customer_list' %}">Customers</a></li>
+          {% if customer %}
+            <li class="breadcrumb-item"><a href="{{ customer.get_absolute_url }}">{{ customer.name }}</a></li>
+          {% endif %}
+          {% if object %}
+            <li class="breadcrumb-item active" aria-current="page">Edit {{ object.brand }} {{ object.model }}</li>
+          {% else %}
+            <li class="breadcrumb-item active" aria-current="page">Register Device</li>
+          {% endif %}
+        </ol>
+      </nav>
+      <h1 class="h3 fw-bold">{{ page_title }}</h1>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-4">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {{ form.non_field_errors }}
+            </div>
+          {% endif %}
+
+          {% if customer %}
+            <div class="alert alert-light border mb-4 d-flex justify-content-between align-items-center">
+              <div>
+                <span class="text-muted small d-block">Owner / Customer:</span>
+                <strong>{{ customer.name }}</strong> ({{ customer.phone }})
+              </div>
+              <a href="{{ customer.get_absolute_url }}" class="btn btn-sm btn-outline-secondary">View Profile</a>
+            </div>
+          {% endif %}
+
+          <div class="row g-3 mb-3">
+            {% if not customer %}
+              <div class="col-12">
+                <label for="{{ form.customer.id_for_label }}" class="form-label fw-semibold">
+                  Select Customer <span class="text-danger">*</span>
+                </label>
+                {{ form.customer }}
+                {% if form.customer.errors %}
+                  <div class="text-danger small mt-1">{{ form.customer.errors.0 }}</div>
+                {% endif %}
+              </div>
+            {% else %}
+              {{ form.customer }}
+            {% endif %}
+
+            <div class="col-md-6">
+              <label for="{{ form.category.id_for_label }}" class="form-label fw-semibold">
+                Equipment Category <span class="text-danger">*</span>
+              </label>
+              {{ form.category }}
+              {% if form.category.errors %}
+                <div class="text-danger small mt-1">{{ form.category.errors.0 }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-md-6">
+              <label for="{{ form.brand.id_for_label }}" class="form-label fw-semibold">
+                Brand / Manufacturer <span class="text-danger">*</span>
+              </label>
+              {{ form.brand }}
+              {% if form.brand.errors %}
+                <div class="text-danger small mt-1">{{ form.brand.errors.0 }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-md-6">
+              <label for="{{ form.model.id_for_label }}" class="form-label fw-semibold">
+                Model Name / Number <span class="text-danger">*</span>
+              </label>
+              {{ form.model }}
+              {% if form.model.errors %}
+                <div class="text-danger small mt-1">{{ form.model.errors.0 }}</div>
+              {% endif %}
+            </div>
+
+            <div class="col-md-6">
+              <label for="{{ form.serial_number.id_for_label }}" class="form-label fw-semibold">
+                Serial Number / Service Tag (Optional)
+              </label>
+              {{ form.serial_number }}
+              {% if form.serial_number.errors %}
+                <div class="text-danger small mt-1">{{ form.serial_number.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.customer_reported_issue.id_for_label }}" class="form-label fw-semibold">
+              Customer-Reported Issue <span class="text-danger">*</span>
+            </label>
+            {{ form.customer_reported_issue }}
+            <div class="form-text small">Detailed explanation of the defect or symptom described by the customer.</div>
+            {% if form.customer_reported_issue.errors %}
+              <div class="text-danger small mt-1">{{ form.customer_reported_issue.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.condition_at_intake.id_for_label }}" class="form-label fw-semibold">
+              Physical Condition at Intake
+            </label>
+            {{ form.condition_at_intake }}
+            <div class="form-text small">Record pre-existing cracks, scratches, dents or missing parts to protect against liability.</div>
+            {% if form.condition_at_intake.errors %}
+              <div class="text-danger small mt-1">{{ form.condition_at_intake.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.accessories_received.id_for_label }}" class="form-label fw-semibold">
+              Accessories Received
+            </label>
+            {{ form.accessories_received }}
+            {% if form.accessories_received.errors %}
+              <div class="text-danger small mt-1">{{ form.accessories_received.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4 form-check">
+            {{ form.is_active }}
+            <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+              Active for service
+            </label>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{% if customer %}{{ customer.get_absolute_url }}{% elif object %}{{ object.get_absolute_url }}{% else %}{% url 'customers:device_list' %}{% endif %}" class="btn btn-outline-secondary">
+              Cancel
+            </a>
+            <button type="submit" class="btn btn-primary fw-semibold px-4">
+              {{ submit_label }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

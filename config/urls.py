@@ -13,4 +13,5 @@ urlpatterns = [
     path("", home, name="home"),
     path("admin/", admin.site.urls),
     path("accounts/", include("apps.accounts.urls")),
+    path("customers/", include("apps.customers.urls")),
 ]

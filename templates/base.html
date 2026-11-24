@@ -27,10 +27,18 @@
             <li class="nav-item">
               <a class="nav-link" href="{% url 'home' %}">Home</a>
             </li>
-            {% if user.is_authenticated and user.is_administrator %}
+            {% if user.is_authenticated %}
               <li class="nav-item">
-                <a class="nav-link" href="{% url 'admin:index' %}">Django Admin</a>
+                <a class="nav-link" href="{% url 'customers:customer_list' %}">Customers</a>
               </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'customers:device_list' %}">Devices</a>
+              </li>
+              {% if user.is_administrator %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'admin:index' %}">Django Admin</a>
+                </li>
+              {% endif %}
             {% endif %}
           </ul>
 

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}{{ device.brand }} {{ device.model }} - Device Details - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'customers:customer_list' %}">Customers</a></li>
+      <li class="breadcrumb-item"><a href="{{ device.customer.get_absolute_url }}">{{ device.customer.name }}</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ device.brand }} {{ device.model }}</li>
+    </ol>
+  </nav>
+
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0">{{ device.brand }} {{ device.model }}</h1>
+        <span class="badge bg-primary-subtle text-primary">{{ device.get_category_display }}</span>
+      </div>
+      <p class="text-muted small mb-0">Registered on {{ device.created_at|date:"M d, Y" }} &bull; Device ID: RD-DEV-{{ device.pk|stringformat:"04d" }}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'customers:device_update' device.pk %}" class="btn btn-outline-secondary">
+        Edit Device
+      </a>
+      <a href="{{ device.customer.get_absolute_url }}" class="btn btn-outline-primary">
+        View Owner Profile
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-7">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Intake &amp; Condition Details</h2>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="text-muted small d-block">Reported Problem / Malfunction</label>
+          <div class="p-3 bg-light rounded text-dark fw-semibold">
+            {{ device.customer_reported_issue|linebreaksbr }}
+          </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="text-muted small d-block">Serial Number / Service Tag</label>
+            {% if device.serial_number %}
+              <code class="fs-6">{{ device.serial_number }}</code>
+            {% else %}
+              <span class="text-muted">Not provided</span>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="text-muted small d-block">Device Status</label>
+            {% if device.is_active %}
+              <span class="badge bg-success-subtle text-success">Active for Service</span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary">Decommissioned</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="text-muted small d-block">Physical Condition at Intake</label>
+          {% if device.condition_at_intake %}
+            <span>{{ device.condition_at_intake|linebreaksbr }}</span>
+          {% else %}
+            <span class="text-muted">No physical defects recorded</span>
+          {% endif %}
+        </div>
+
+        <div class="mb-0">
+          <label class="text-muted small d-block">Accessories Received</label>
+          {% if device.accessories_received %}
+            <span class="badge bg-info-subtle text-dark border p-2">{{ device.accessories_received }}</span>
+          {% else %}
+            <span class="text-muted">None received</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-5">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Customer / Owner</h2>
+      </div>
+      <div class="card-body">
+        <h3 class="h6 fw-bold mb-2">
+          <a href="{{ device.customer.get_absolute_url }}" class="text-decoration-none text-dark">
+            {{ device.customer.name }}
+          </a>
+        </h3>
+        <p class="mb-1 text-muted small"><strong>Phone:</strong> {{ device.customer.phone }}</p>
+        {% if device.customer.email %}
+          <p class="mb-1 text-muted small"><strong>Email:</strong> {{ device.customer.email }}</p>
+        {% endif %}
+        {% if device.customer.address %}
+          <p class="mb-0 text-muted small"><strong>Address:</strong> {{ device.customer.address }}</p>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-white py-3">
+        <a href="{{ device.customer.get_absolute_url }}" class="btn btn-sm btn-outline-primary w-100">
+          Go to Customer Profile
+        </a>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Repair Tickets</h2>
+      </div>
+      <div class="card-body text-center py-4 text-muted">
+        <p class="small mb-0">Repair ticket history will appear here once ticket workflows are generated in Phase 3.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
