@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Search Results for "{{ query }}" - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="h3 fw-bold mb-2">Search Results</h1>
+  {% if query %}
+    <p class="text-muted small">Showing results for <strong>"{{ query }}"</strong> &bull; Total matches: {{ total_matches }}</p>
+  {% else %}
+    <p class="text-muted small">Please enter a search term in the box above to find tickets, customers, or equipment.</p>
+  {% endif %}
+</div>
+
+{% if results_found %}
+  <!-- Matched Service Tickets -->
+  {% if tickets %}
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Service Tickets ({{ tickets.count }})</h2>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Ticket #</th>
+                <th scope="col">Customer</th>
+                <th scope="col">Equipment</th>
+                <th scope="col">Status</th>
+                <th scope="col">Technician</th>
+                <th scope="col" class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ticket in tickets %}
+                <tr>
+                  <td>
+                    <a href="{{ ticket.get_absolute_url }}" class="fw-bold text-decoration-none">
+                      {{ ticket.ticket_number }}
+                    </a>
+                  </td>
+                  <td>{{ ticket.customer.name }} ({{ ticket.customer.phone }})</td>
+                  <td>{{ ticket.device.brand }} {{ ticket.device.model }}</td>
+                  <td>
+                    <span class="badge bg-light text-dark border">{{ ticket.get_status_display }}</span>
+                  </td>
+                  <td>
+                    {% if ticket.assigned_technician %}
+                      {{ ticket.assigned_technician.display_name|default:ticket.assigned_technician.username }}
+                    {% else %}
+                      <span class="badge bg-warning-subtle text-dark">Unassigned</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <a href="{{ ticket.get_absolute_url }}" class="btn btn-sm btn-outline-secondary">View</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Matched Customers -->
+  {% if customers %}
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Customers ({{ customers.count }})</h2>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Phone</th>
+                <th scope="col">Email</th>
+                <th scope="col">Devices</th>
+                <th scope="col" class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for customer in customers %}
+                <tr>
+                  <td>
+                    <a href="{{ customer.get_absolute_url }}" class="fw-bold text-decoration-none">
+                      {{ customer.name }}
+                    </a>
+                  </td>
+                  <td>{{ customer.phone }}</td>
+                  <td>{{ customer.email|default:"&mdash;" }}</td>
+                  <td>{{ customer.total_devices }} registered</td>
+                  <td class="text-end">
+                    <a href="{{ customer.get_absolute_url }}" class="btn btn-sm btn-outline-secondary">Profile</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Matched Devices -->
+  {% if devices %}
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Equipment &amp; Devices ({{ devices.count }})</h2>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Brand &amp; Model</th>
+                <th scope="col">Category</th>
+                <th scope="col">Serial Number</th>
+                <th scope="col">Owner</th>
+                <th scope="col" class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for device in devices %}
+                <tr>
+                  <td>
+                    <a href="{{ device.get_absolute_url }}" class="fw-bold text-decoration-none">
+                      {{ device.brand }} {{ device.model }}
+                    </a>
+                  </td>
+                  <td>{{ device.get_category_display }}</td>
+                  <td><code>{{ device.serial_number|default:"&mdash;" }}</code></td>
+                  <td>{{ device.customer.name }} ({{ device.customer.phone }})</td>
+                  <td class="text-end">
+                    <a href="{{ device.get_absolute_url }}" class="btn btn-sm btn-outline-secondary">Device Info</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+{% else %}
+  <div class="card shadow-sm border-0 py-5 text-center text-muted">
+    <div class="card-body">
+      <h2 class="h5 fw-bold mb-2">No Matching Records Found</h2>
+      <p class="small text-muted mb-3">We couldn't find any tickets, customer names, phone numbers, or equipment serials matching "{{ query }}".</p>
+      <div class="d-flex justify-content-center gap-2">
+        <a href="{% url 'tickets:ticket_create' %}" class="btn btn-sm btn-primary">Create New Ticket</a>
+        <a href="{% url 'customers:customer_create' %}" class="btn btn-sm btn-outline-primary">Register Customer</a>
+      </div>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

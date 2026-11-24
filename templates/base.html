@@ -24,10 +24,10 @@
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-            <li class="nav-item">
-              <a class="nav-link" href="{% url 'home' %}">Home</a>
-            </li>
             {% if user.is_authenticated %}
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'dashboard:overview' %}">Dashboard</a>
+              </li>
               <li class="nav-item">
                 <a class="nav-link" href="{% url 'tickets:ticket_list' %}">Tickets</a>
               </li>
@@ -42,13 +42,26 @@
               <li class="nav-item">
                 <a class="nav-link" href="{% url 'customers:device_list' %}">Devices</a>
               </li>
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'dashboard:reports' %}">Reports</a>
+              </li>
               {% if user.is_administrator %}
                 <li class="nav-item">
                   <a class="nav-link" href="{% url 'admin:index' %}">Django Admin</a>
                 </li>
               {% endif %}
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'home' %}">Home</a>
+              </li>
             {% endif %}
           </ul>
+
+          {% if user.is_authenticated %}
+            <form class="d-flex mx-lg-3 my-2 my-lg-0" style="max-width: 280px;" method="get" action="{% url 'dashboard:search' %}">
+              <input class="form-control form-control-sm bg-dark text-white border-secondary" type="search" name="q" placeholder="Search ticket #, serial, client..." aria-label="Search">
+            </form>
+          {% endif %}
 
           <ul class="navbar-nav ms-auto align-items-lg-center">
             {% if user.is_authenticated %}

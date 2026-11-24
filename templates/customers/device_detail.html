@@ -142,7 +142,11 @@
                     <span class="badge bg-light text-dark border">{{ ticket.get_status_display }}</span>
                   </td>
                   <td>
-                    <span class="small">{{ ticket.assigned_technician.display_name|default:ticket.assigned_technician.username|default:"Unassigned" }}</span>
+                    {% if ticket.assigned_technician %}
+                      <span class="small">{{ ticket.assigned_technician.display_name|default:ticket.assigned_technician.username }}</span>
+                    {% else %}
+                      <span class="badge bg-warning-subtle text-dark">Unassigned</span>
+                    {% endif %}
                   </td>
                   <td>
                     <span class="small text-muted">{{ ticket.created_at|date:"M d, Y" }}</span>
