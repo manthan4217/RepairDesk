@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}My Assigned Jobs - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+  <div>
+    <h1 class="h3 fw-bold mb-1">Technician Workspace</h1>
+    <p class="text-muted small mb-0">Logged in as: <strong>{{ user.display_name|default:user.username }}</strong> &bull; Total Assigned: {{ my_total }}</p>
+  </div>
+  <div>
+    <a class="btn btn-outline-secondary" href="{% url 'tickets:ticket_list' %}">
+      View All Shop Tickets
+    </a>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-4">
+    <div class="card border-0 shadow-sm p-3 border-start border-primary border-4">
+      <span class="text-muted small fw-semibold text-uppercase">Total Assigned</span>
+      <h2 class="h3 fw-bold mb-0 mt-1">{{ my_total }}</h2>
+    </div>
+  </div>
+  <div class="col-4">
+    <div class="card border-0 shadow-sm p-3 border-start border-warning border-4">
+      <span class="text-muted small fw-semibold text-uppercase">Underway / In Progress</span>
+      <h2 class="h3 fw-bold mb-0 mt-1 text-warning">{{ my_in_progress }}</h2>
+    </div>
+  </div>
+  <div class="col-4">
+    <div class="card border-0 shadow-sm p-3 border-start border-success border-4">
+      <span class="text-muted small fw-semibold text-uppercase">Completed / Ready</span>
+      <h2 class="h3 fw-bold mb-0 mt-1 text-success">{{ my_completed }}</h2>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm border-0">
+  <div class="card-header bg-white py-3">
+    <h2 class="h5 mb-0 fw-bold">Active Jobs Queue</h2>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Ticket #</th>
+          <th scope="col">Customer</th>
+          <th scope="col">Equipment</th>
+          <th scope="col">Priority</th>
+          <th scope="col">Status</th>
+          <th scope="col">Reported Issue</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ticket in tickets %}
+          <tr>
+            <td>
+              <a href="{{ ticket.get_absolute_url }}" class="fw-bold text-decoration-none text-primary">
+                {{ ticket.ticket_number }}
+              </a>
+            </td>
+            <td>
+              <span class="fw-semibold">{{ ticket.customer.name }}</span>
+              <span class="text-muted small d-block">{{ ticket.customer.phone }}</span>
+            </td>
+            <td>
+              <span>{{ ticket.device.brand }} {{ ticket.device.model }}</span>
+            </td>
+            <td>
+              {% if ticket.priority == 'urgent' %}
+                <span class="badge bg-danger">Urgent</span>
+              {% elif ticket.priority == 'high' %}
+                <span class="badge bg-warning text-dark">High</span>
+              {% elif ticket.priority == 'normal' %}
+                <span class="badge bg-primary-subtle text-primary">Normal</span>
+              {% else %}
+                <span class="badge bg-secondary-subtle text-secondary">Low</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if ticket.status == 'received' %}
+                <span class="badge bg-info-subtle text-dark border">Received</span>
+              {% elif ticket.status == 'under_diagnosis' %}
+                <span class="badge bg-primary">Diagnosis</span>
+              {% elif ticket.status == 'in_progress' %}
+                <span class="badge bg-warning text-dark">In Progress</span>
+              {% elif ticket.status == 'completed' %}
+                <span class="badge bg-success">Completed</span>
+              {% elif ticket.status == 'ready_for_delivery' %}
+                <span class="badge bg-success-subtle text-success border">Ready for Handover</span>
+              {% elif ticket.status == 'delivered' %}
+                <span class="badge bg-secondary">Closed</span>
+              {% elif ticket.status == 'on_hold' %}
+                <span class="badge bg-secondary-subtle text-dark">On Hold</span>
+              {% elif ticket.status == 'cancelled' %}
+                <span class="badge bg-danger-subtle text-danger">Cancelled</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="small text-muted text-truncate d-inline-block" style="max-width: 220px;">
+                {{ ticket.issue_description }}
+              </span>
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a href="{{ ticket.get_absolute_url }}" class="btn btn-outline-primary">Open</a>
+                <a href="{% url 'tickets:repair_update_create' ticket.pk %}" class="btn btn-outline-secondary">+ Note</a>
+                <a href="{% url 'tickets:ticket_status_update' ticket.pk %}" class="btn btn-outline-secondary">Status</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-5 text-muted">
+              <p class="mb-1">You currently have no repair jobs assigned to you.</p>
+              <a href="{% url 'tickets:ticket_list' %}" class="btn btn-sm btn-primary">Check Shop Ticket Queue</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

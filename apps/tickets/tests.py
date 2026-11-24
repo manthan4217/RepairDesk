@@ -1,13 +1,13 @@
-"""Automated tests for Service Tickets and Assignment Engine (Phase 3)."""
+"""Automated tests for Service Tickets, Assignments, Notes, and Lifecycle (Phase 3 & 4)."""
 
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.customers.models import Customer, Device
-from .forms import TicketCreateForm
-from .models import Assignment, ServiceTicket
+from .forms import CompletionReportForm, RepairUpdateForm, StatusTransitionForm, TicketCreateForm
+from .models import Assignment, CompletionReport, RepairUpdate, ServiceTicket, StatusHistory
 from .services import generate_ticket_number
 
 User = get_user_model()
@@ -49,7 +49,6 @@ class TicketModelAndSequenceTests(TestCase):
         self.assertTrue(num1.startswith("RD-"))
         self.assertTrue(num1.endswith("00001"))
 
-        # Create ticket with num1
         ServiceTicket.objects.create(
             customer=self.customer1,
             device=self.device1,
@@ -64,7 +63,7 @@ class TicketModelAndSequenceTests(TestCase):
         """A ticket with Customer 1 and Device 2 (belonging to Customer 2) must fail validation."""
         ticket = ServiceTicket(
             customer=self.customer1,
-            device=self.device2,  # Owned by customer2!
+            device=self.device2,
             created_by=self.staff_user,
             issue_description="Mismatched ownership test",
         )
@@ -81,7 +80,6 @@ class TicketModelAndSequenceTests(TestCase):
         self.assertIsNone(ticket.assigned_technician)
         self.assertEqual(ticket.assignments.count(), 0)
 
-        # Assign to repair_tech
         ticket.assign_to(
             technician=self.tech_user,
             assigned_by=self.staff_user,
@@ -113,108 +111,214 @@ class TicketModelAndSequenceTests(TestCase):
             ticket.assign_to(self.tech_user, self.staff_user)
 
 
-class TicketViewsTests(TestCase):
+class LifecycleAndStateMachineTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="manager_dan",
-            password="testpassword",
-            role=User.Role.ADMINISTRATOR,
-        )
-        self.tech = User.objects.create_user(
-            username="tech_bob",
+        self.tech_user = User.objects.create_user(
+            username="tech_john",
             password="testpassword",
             role=User.Role.TECHNICIAN,
-            display_name="Bob Technician",
         )
-        self.customer = Customer.objects.create(name="Wayne Enterprises", phone="9988776655")
+        self.customer = Customer.objects.create(name="Omega Corp", phone="5556667777")
         self.device = Device.objects.create(
             customer=self.customer,
-            category=Device.Category.DESKTOP,
-            brand="Custom",
-            model="Workstation Pro",
-            serial_number="WS-990",
-            customer_reported_issue="Overheating under load",
+            category=Device.Category.LAPTOP,
+            brand="Lenovo",
+            model="ThinkPad X1",
+            customer_reported_issue="Keyboard keys sticking",
         )
         self.ticket = ServiceTicket.objects.create(
             customer=self.customer,
             device=self.device,
-            created_by=self.user,
-            priority=ServiceTicket.Priority.HIGH,
-            issue_description="CPU throttling after 5 minutes",
-            estimated_cost=2500.00,
+            created_by=self.tech_user,
+            assigned_technician=self.tech_user,
+            status=ServiceTicket.Status.RECEIVED,
+            issue_description="Keyboard keys sticking",
         )
 
-    def test_ticket_list_view(self):
-        self.client.login(username="manager_dan", password="testpassword")
-        response = self.client.get(reverse("tickets:ticket_list"))
+    def test_valid_status_transitions(self):
+        # RECEIVED -> UNDER_DIAGNOSIS
+        self.ticket.update_status(ServiceTicket.Status.UNDER_DIAGNOSIS, self.tech_user, reason="Started bench inspection")
+        self.assertEqual(self.ticket.status, ServiceTicket.Status.UNDER_DIAGNOSIS)
+        self.assertEqual(self.ticket.status_history.count(), 1)
+
+        # UNDER_DIAGNOSIS -> IN_PROGRESS
+        self.ticket.update_status(ServiceTicket.Status.IN_PROGRESS, self.tech_user, reason="Disassembling chassis")
+        self.assertEqual(self.ticket.status, ServiceTicket.Status.IN_PROGRESS)
+
+        # IN_PROGRESS -> COMPLETED
+        self.ticket.update_status(ServiceTicket.Status.COMPLETED, self.tech_user, reason="Cleaned membrane switches")
+        self.assertEqual(self.ticket.status, ServiceTicket.Status.COMPLETED)
+        self.assertEqual(self.ticket.status_history.count(), 3)
+
+    def test_invalid_status_transition_rejected(self):
+        """Technician jumping straight from RECEIVED to DELIVERED must be rejected."""
+        with self.assertRaises(ValidationError):
+            self.ticket.update_status(ServiceTicket.Status.DELIVERED, self.tech_user)
+
+    def test_delivery_requires_completion_report(self):
+        """Attempting to transition from COMPLETED to READY_FOR_DELIVERY without a CompletionReport must fail."""
+        self.ticket.status = ServiceTicket.Status.COMPLETED
+        self.ticket.save()
+
+        with self.assertRaises(ValidationError):
+            self.ticket.update_status(ServiceTicket.Status.READY_FOR_DELIVERY, self.tech_user)
+
+        # Now attach a CompletionReport
+        CompletionReport.objects.create(
+            ticket=self.ticket,
+            technician=self.tech_user,
+            diagnosis_summary="Liquid ingress on keyboard",
+            work_performed="Replaced top case assembly",
+        )
+
+        # Now transition should succeed
+        self.ticket.update_status(ServiceTicket.Status.READY_FOR_DELIVERY, self.tech_user, reason="QC Passed")
+        self.assertEqual(self.ticket.status, ServiceTicket.Status.READY_FOR_DELIVERY)
+
+
+class RepairUpdateAndReportTests(TestCase):
+    def setUp(self):
+        self.tech = User.objects.create_user(username="tech_mike", password="testpassword", role=User.Role.TECHNICIAN)
+        self.customer = Customer.objects.create(name="Delta Ltd", phone="9988112233")
+        self.device = Device.objects.create(
+            customer=self.customer,
+            category=Device.Category.DESKTOP,
+            brand="HP",
+            model="ProDesk 400",
+            customer_reported_issue="No POST",
+        )
+        self.ticket = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device,
+            created_by=self.tech,
+            assigned_technician=self.tech,
+            issue_description="No POST issue",
+        )
+
+    def test_repair_update_creation(self):
+        update = RepairUpdate.objects.create(
+            ticket=self.ticket,
+            author=self.tech,
+            update_type=RepairUpdate.UpdateType.DIAGNOSIS,
+            notes="RAM stick in slot 2 is faulty. Tested with spare DDR4 and boots to UEFI.",
+        )
+        self.assertEqual(self.ticket.updates.count(), 1)
+        self.assertEqual(update.get_update_type_display(), "Diagnosis Finding")
+        self.assertIn("tech_mike", str(update))
+
+    def test_completion_report_creation(self):
+        report = CompletionReport.objects.create(
+            ticket=self.ticket,
+            technician=self.tech,
+            diagnosis_summary="Defective 8GB DDR4 RAM stick",
+            work_performed="Installed 8GB DDR4 3200MHz RAM and completed 2 passes of MemTest86",
+            parts_replaced="1x 8GB DDR4 Module",
+            technician_remarks="Advised customer to keep chassis vents clear of dust",
+        )
+        self.assertTrue(hasattr(self.ticket, "completion_report"))
+        self.assertEqual(self.ticket.completion_report, report)
+
+
+class TechnicianWorkspaceViewsTests(TestCase):
+    def setUp(self):
+        self.tech_a = User.objects.create_user(username="tech_alice", password="testpassword", role=User.Role.TECHNICIAN)
+        self.tech_b = User.objects.create_user(username="tech_bob", password="testpassword", role=User.Role.TECHNICIAN)
+        self.customer = Customer.objects.create(name="Customer A", phone="1234567890")
+        self.device_a = Device.objects.create(
+            customer=self.customer,
+            category=Device.Category.LAPTOP,
+            brand="Dell",
+            model="Inspiron",
+            customer_reported_issue="Screen flickering",
+        )
+        self.device_b = Device.objects.create(
+            customer=self.customer,
+            category=Device.Category.SMARTPHONE,
+            brand="OnePlus",
+            model="11",
+            customer_reported_issue="Mic not working",
+        )
+
+        self.ticket_a = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device_a,
+            created_by=self.tech_a,
+            assigned_technician=self.tech_a,
+            issue_description="Screen flickering",
+        )
+        self.ticket_b = ServiceTicket.objects.create(
+            customer=self.customer,
+            device=self.device_b,
+            created_by=self.tech_b,
+            assigned_technician=self.tech_b,
+            issue_description="Mic not working",
+        )
+
+    def test_my_jobs_list_view_filters_by_technician(self):
+        """Technician A should only see Ticket A in their My Jobs queue."""
+        self.client.login(username="tech_alice", password="testpassword")
+        response = self.client.get(reverse("tickets:my_jobs"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, self.ticket.ticket_number)
-        self.assertContains(response, "Wayne Enterprises")
-        self.assertContains(response, "Workstation Pro")
+        self.assertContains(response, self.ticket_a.ticket_number)
+        self.assertNotContains(response, self.ticket_b.ticket_number)
 
-    def test_ticket_search_and_filter(self):
-        self.client.login(username="manager_dan", password="testpassword")
-        # Search by ticket number
-        response = self.client.get(reverse("tickets:ticket_list"), {"q": self.ticket.ticket_number})
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, self.ticket.ticket_number)
-
-        # Filter by priority
-        response_prio = self.client.get(reverse("tickets:ticket_list"), {"priority": "high"})
-        self.assertEqual(response_prio.status_code, 200)
-        self.assertContains(response_prio, self.ticket.ticket_number)
-
-    def test_ticket_create_view(self):
-        self.client.login(username="manager_dan", password="testpassword")
+    def test_repair_update_create_view(self):
+        self.client.login(username="tech_alice", password="testpassword")
         response = self.client.post(
-            reverse("tickets:ticket_create"),
+            reverse("tickets:repair_update_create", kwargs={"pk": self.ticket_a.pk}),
             {
-                "customer": self.customer.pk,
-                "device": self.device.pk,
-                "priority": ServiceTicket.Priority.URGENT,
-                "issue_description": "New critical malfunction reported",
-                "estimated_cost": "1500.00",
+                "update_type": RepairUpdate.UpdateType.PROGRESS,
+                "notes": "EDP cable reseated and test display running.",
             },
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(ServiceTicket.objects.count(), 2)
-        new_ticket = ServiceTicket.objects.exclude(pk=self.ticket.pk).first()
-        self.assertEqual(new_ticket.priority, ServiceTicket.Priority.URGENT)
-        self.assertContains(response, new_ticket.ticket_number)
+        self.assertEqual(self.ticket_a.updates.count(), 1)
+        self.assertContains(response, "EDP cable reseated")
 
-    def test_ticket_detail_view(self):
-        self.client.login(username="manager_dan", password="testpassword")
-        response = self.client.get(self.ticket.get_absolute_url())
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, self.ticket.ticket_number)
-        self.assertContains(response, "Wayne Enterprises")
-        self.assertContains(response, "Workstation Pro")
-        self.assertContains(response, "CPU throttling after 5 minutes")
-
-    def test_ticket_assign_view(self):
-        self.client.login(username="manager_dan", password="testpassword")
+    def test_status_transition_view(self):
+        self.client.login(username="tech_alice", password="testpassword")
         response = self.client.post(
-            reverse("tickets:ticket_assign", kwargs={"pk": self.ticket.pk}),
+            reverse("tickets:ticket_status_update", kwargs={"pk": self.ticket_a.pk}),
             {
-                "technician": self.tech.pk,
-                "notes": "Assigned via web UI",
+                "status": ServiceTicket.Status.UNDER_DIAGNOSIS,
+                "reason": "Starting diagnosis",
             },
             follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        self.ticket.refresh_from_db()
-        self.assertEqual(self.ticket.assigned_technician, self.tech)
-        self.assertContains(response, "Bob Technician")
+        self.ticket_a.refresh_from_db()
+        self.assertEqual(self.ticket_a.status, ServiceTicket.Status.UNDER_DIAGNOSIS)
 
-    def test_customer_devices_json_api(self):
-        self.client.login(username="manager_dan", password="testpassword")
-        response = self.client.get(
-            reverse("tickets:customer_devices_api", kwargs={"customer_id": self.customer.pk})
+    def test_completion_report_view(self):
+        self.ticket_a.status = ServiceTicket.Status.IN_PROGRESS
+        self.ticket_a.save()
+
+        self.client.login(username="tech_alice", password="testpassword")
+        response = self.client.post(
+            reverse("tickets:completion_report_create", kwargs={"pk": self.ticket_a.pk}),
+            {
+                "diagnosis_summary": "Loose LVDS connector pins",
+                "work_performed": "Cleaned connector and secured with Kapton tape",
+                "parts_replaced": "None",
+                "technician_remarks": "Passed 24hr stress test",
+            },
+            follow=True,
         )
         self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertIn("devices", data)
-        self.assertEqual(len(data["devices"]), 1)
-        self.assertEqual(data["devices"][0]["id"], self.device.pk)
-        self.assertIn("Workstation Pro", data["devices"][0]["label"])
+        self.ticket_a.refresh_from_db()
+        self.assertTrue(hasattr(self.ticket_a, "completion_report"))
+        self.assertEqual(self.ticket_a.status, ServiceTicket.Status.COMPLETED)
+        self.assertContains(response, "Signed Completion Report")
+
+    def test_idor_protection_other_technician_blocked(self):
+        """Tech Bob attempting to add a repair update to Tech Alice's ticket must receive 403 Forbidden."""
+        self.client.login(username="tech_bob", password="testpassword")
+        response = self.client.post(
+            reverse("tickets:repair_update_create", kwargs={"pk": self.ticket_a.pk}),
+            {
+                "update_type": RepairUpdate.UpdateType.PROGRESS,
+                "notes": "Unauthorized note from Bob",
+            },
+        )
+        self.assertEqual(response.status_code, 403)

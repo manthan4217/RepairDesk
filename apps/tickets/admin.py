@@ -1,13 +1,27 @@
-"""Django Admin registration for Service Tickets and Assignments."""
+"""Django Admin registration for Service Tickets, Assignments, Notes, and Completion Reports."""
 
 from django.contrib import admin
-from .models import Assignment, ServiceTicket
+from .models import Assignment, CompletionReport, RepairUpdate, ServiceTicket, StatusHistory
 
 
 class AssignmentInline(admin.TabularInline):
     model = Assignment
     extra = 0
     readonly_fields = ("technician", "assigned_by", "assigned_at", "notes", "is_current")
+    can_delete = False
+
+
+class RepairUpdateInline(admin.TabularInline):
+    model = RepairUpdate
+    extra = 0
+    readonly_fields = ("author", "update_type", "notes", "created_at")
+    can_delete = False
+
+
+class StatusHistoryInline(admin.TabularInline):
+    model = StatusHistory
+    extra = 0
+    readonly_fields = ("old_status", "new_status", "changed_by", "changed_at", "reason")
     can_delete = False
 
 
@@ -32,7 +46,7 @@ class ServiceTicketAdmin(admin.ModelAdmin):
         "device__serial_number",
     )
     readonly_fields = ("ticket_number", "created_by", "created_at", "updated_at")
-    inlines = [AssignmentInline]
+    inlines = [AssignmentInline, RepairUpdateInline, StatusHistoryInline]
 
 
 @admin.register(Assignment)
@@ -41,3 +55,26 @@ class AssignmentAdmin(admin.ModelAdmin):
     list_filter = ("is_current", "assigned_at")
     search_fields = ("ticket__ticket_number", "technician__username", "assigned_by__username")
     readonly_fields = ("assigned_at",)
+
+
+@admin.register(RepairUpdate)
+class RepairUpdateAdmin(admin.ModelAdmin):
+    list_display = ("ticket", "update_type", "author", "created_at")
+    list_filter = ("update_type", "created_at")
+    search_fields = ("ticket__ticket_number", "author__username", "notes")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(StatusHistory)
+class StatusHistoryAdmin(admin.ModelAdmin):
+    list_display = ("ticket", "old_status", "new_status", "changed_by", "changed_at")
+    list_filter = ("new_status", "changed_at")
+    search_fields = ("ticket__ticket_number", "changed_by__username", "reason")
+    readonly_fields = ("changed_at",)
+
+
+@admin.register(CompletionReport)
+class CompletionReportAdmin(admin.ModelAdmin):
+    list_display = ("ticket", "technician", "completed_at")
+    search_fields = ("ticket__ticket_number", "technician__username", "diagnosis_summary", "work_performed")
+    readonly_fields = ("completed_at",)

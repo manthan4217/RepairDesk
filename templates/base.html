@@ -31,6 +31,11 @@
               <li class="nav-item">
                 <a class="nav-link" href="{% url 'tickets:ticket_list' %}">Tickets</a>
               </li>
+              {% if user.is_technician or user.is_administrator %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{% url 'tickets:my_jobs' %}">My Jobs</a>
+                </li>
+              {% endif %}
               <li class="nav-item">
                 <a class="nav-link" href="{% url 'customers:customer_list' %}">Customers</a>
               </li>

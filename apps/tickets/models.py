@@ -1,4 +1,4 @@
-"""Models for Service Tickets, Technician Assignments, and Lifecycle Tracking."""
+"""Models for Service Tickets, Technician Assignments, Repair Updates, and Completion Reports."""
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -26,6 +26,17 @@ class ServiceTicket(models.Model):
         NORMAL = "normal", "Normal"
         HIGH = "high", "High"
         URGENT = "urgent", "Urgent"
+
+    ALLOWED_TRANSITIONS = {
+        Status.RECEIVED: [Status.UNDER_DIAGNOSIS, Status.IN_PROGRESS, Status.CANCELLED],
+        Status.UNDER_DIAGNOSIS: [Status.IN_PROGRESS, Status.COMPLETED, Status.ON_HOLD, Status.CANCELLED],
+        Status.IN_PROGRESS: [Status.COMPLETED, Status.ON_HOLD, Status.CANCELLED],
+        Status.ON_HOLD: [Status.IN_PROGRESS, Status.UNDER_DIAGNOSIS, Status.CANCELLED],
+        Status.COMPLETED: [Status.READY_FOR_DELIVERY, Status.IN_PROGRESS],
+        Status.READY_FOR_DELIVERY: [Status.DELIVERED, Status.COMPLETED],
+        Status.DELIVERED: [],
+        Status.CANCELLED: [],
+    }
 
     ticket_number = models.CharField(
         max_length=32,
@@ -99,14 +110,12 @@ class ServiceTicket(models.Model):
 
     def clean(self):
         super().clean()
-        # Business Rule: Device must belong to the selected customer
         if self.device_id and self.customer_id:
             if self.device.customer_id != self.customer_id:
                 raise ValidationError(
                     {"device": f"The device '{self.device.brand} {self.device.model}' does not belong to {self.customer.name}."}
                 )
 
-        # Business Rule: Inactive technician cannot receive an assignment
         if self.assigned_technician_id and not self.assigned_technician.is_active:
             raise ValidationError(
                 {"assigned_technician": f"Cannot assign ticket to '{self.assigned_technician.username}' because this technician account is inactive."}
@@ -128,10 +137,7 @@ class ServiceTicket(models.Model):
             raise ValidationError(f"Cannot assign job to inactive user: {technician.username}")
 
         with transaction.atomic():
-            # Mark previous active assignments as not current
             self.assignments.filter(is_current=True).update(is_current=False)
-
-            # Create new assignment record
             Assignment.objects.create(
                 ticket=self,
                 technician=technician,
@@ -139,9 +145,46 @@ class ServiceTicket(models.Model):
                 notes=notes,
                 is_current=True,
             )
-
             self.assigned_technician = technician
             self.save(update_fields=["assigned_technician", "updated_at"])
+
+    def can_transition_to(self, new_status):
+        """Checks if transitioning from current status to new_status is permitted."""
+        if self.status == new_status:
+            return True
+        allowed = self.ALLOWED_TRANSITIONS.get(self.status, [])
+        return new_status in allowed
+
+    def update_status(self, new_status, user, reason=""):
+        """Updates ticket status, enforces lifecycle rules, and records in StatusHistory."""
+        if new_status == self.status:
+            return
+
+        # Check permitted transition (administrators have override capability for exceptional cases)
+        if not self.can_transition_to(new_status) and not user.is_administrator:
+            raise ValidationError(
+                f"Invalid status transition from '{self.get_status_display()}' to '{dict(self.Status.choices).get(new_status)}'."
+            )
+
+        # Rule: Transition to Ready for Delivery or Delivered requires a Completion Report
+        if new_status in [self.Status.READY_FOR_DELIVERY, self.Status.DELIVERED]:
+            if not hasattr(self, "completion_report"):
+                raise ValidationError(
+                    "A ticket cannot be marked Ready for Delivery or Closed without an approved Completion Report."
+                )
+
+        with transaction.atomic():
+            old_status = self.status
+            self.status = new_status
+            self.save(update_fields=["status", "updated_at"])
+
+            StatusHistory.objects.create(
+                ticket=self,
+                old_status=old_status,
+                new_status=new_status,
+                changed_by=user,
+                reason=reason,
+            )
 
 
 class Assignment(models.Model):
@@ -180,3 +223,112 @@ class Assignment(models.Model):
 
     def __str__(self):
         return f"{self.ticket.ticket_number} -> {self.technician.username} ({self.assigned_at.strftime('%Y-%m-%d')})"
+
+
+class RepairUpdate(models.Model):
+    """Diagnosis findings, repair progress notes, and parts logs recorded during servicing."""
+
+    class UpdateType(models.TextChoices):
+        DIAGNOSIS = "diagnosis", "Diagnosis Finding"
+        PROGRESS = "progress", "Repair Progress"
+        PARTS = "parts", "Parts Used / Required"
+        GENERAL = "general", "General Note"
+
+    ticket = models.ForeignKey(
+        ServiceTicket,
+        on_delete=models.CASCADE,
+        related_name="updates",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="repair_updates",
+    )
+    update_type = models.CharField(
+        max_length=20,
+        choices=UpdateType.choices,
+        default=UpdateType.PROGRESS,
+    )
+    notes = models.TextField(
+        help_text="Technical notes on diagnostic findings, test results, or work performed.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Repair Update"
+        verbose_name_plural = "Repair Updates"
+
+    def __str__(self):
+        return f"{self.get_update_type_display()} on {self.ticket.ticket_number} by {self.author.username}"
+
+
+class StatusHistory(models.Model):
+    """Audit trail of lifecycle status transitions for a service ticket."""
+
+    ticket = models.ForeignKey(
+        ServiceTicket,
+        on_delete=models.CASCADE,
+        related_name="status_history",
+    )
+    old_status = models.CharField(max_length=32)
+    new_status = models.CharField(max_length=32)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="status_changes",
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Reason for hold, cancellation, or status change.",
+    )
+
+    class Meta:
+        ordering = ["-changed_at"]
+        verbose_name = "Status History"
+        verbose_name_plural = "Status History"
+
+    def __str__(self):
+        return f"{self.ticket.ticket_number}: {self.old_status} -> {self.new_status} by {self.changed_by.username}"
+
+
+class CompletionReport(models.Model):
+    """Formal sign-off report submitted upon repair completion before device handover."""
+
+    ticket = models.OneToOneField(
+        ServiceTicket,
+        on_delete=models.CASCADE,
+        related_name="completion_report",
+        help_text="The service ticket this report concludes.",
+    )
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="completed_reports",
+    )
+    diagnosis_summary = models.TextField(
+        help_text="Final confirmed root cause of the reported malfunction.",
+    )
+    work_performed = models.TextField(
+        help_text="Comprehensive summary of repair steps, tests, and component servicing performed.",
+    )
+    parts_replaced = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Components, chips, or replacement parts installed (if applicable).",
+    )
+    technician_remarks = models.TextField(
+        blank=True,
+        help_text="Post-repair recommendations, preventive tips, or warranty notes for the customer.",
+    )
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-completed_at"]
+        verbose_name = "Completion Report"
+        verbose_name_plural = "Completion Reports"
+
+    def __str__(self):
+        return f"Completion Report for {self.ticket.ticket_number} ({self.technician.username})"

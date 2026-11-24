@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Completion Report - {{ ticket.ticket_number }} - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-10 col-lg-8">
+    <div class="mb-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{% url 'tickets:ticket_list' %}">Tickets</a></li>
+          <li class="breadcrumb-item"><a href="{{ ticket.get_absolute_url }}">{{ ticket.ticket_number }}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Completion Report</li>
+        </ol>
+      </nav>
+      <h1 class="h3 fw-bold">Submit Repair Completion Report</h1>
+      <p class="text-muted small">Ticket: <strong>{{ ticket.ticket_number }}</strong> &bull; Device: {{ ticket.device.brand }} {{ ticket.device.model }} ({{ ticket.customer.name }})</p>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-4">
+        <div class="alert alert-success d-flex align-items-center mb-4">
+          <div>
+            <strong>Final Sign-Off:</strong> Submitting this completion report formally marks the repair as completed and prepares the equipment for customer handover.
+          </div>
+        </div>
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {{ form.non_field_errors }}
+            </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="{{ form.diagnosis_summary.id_for_label }}" class="form-label fw-semibold">
+              Root Cause Diagnosis Summary <span class="text-danger">*</span>
+            </label>
+            {{ form.diagnosis_summary }}
+            <div class="form-text small">{{ form.diagnosis_summary.help_text }}</div>
+            {% if form.diagnosis_summary.errors %}
+              <div class="text-danger small mt-1">{{ form.diagnosis_summary.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.work_performed.id_for_label }}" class="form-label fw-semibold">
+              Work Performed &amp; Testing Done <span class="text-danger">*</span>
+            </label>
+            {{ form.work_performed }}
+            <div class="form-text small">{{ form.work_performed.help_text }}</div>
+            {% if form.work_performed.errors %}
+              <div class="text-danger small mt-1">{{ form.work_performed.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="{{ form.parts_replaced.id_for_label }}" class="form-label fw-semibold">
+              Parts or Components Replaced
+            </label>
+            {{ form.parts_replaced }}
+            <div class="form-text small">{{ form.parts_replaced.help_text }}</div>
+            {% if form.parts_replaced.errors %}
+              <div class="text-danger small mt-1">{{ form.parts_replaced.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label for="{{ form.technician_remarks.id_for_label }}" class="form-label fw-semibold">
+              Customer Handover Remarks &amp; Recommendations
+            </label>
+            {{ form.technician_remarks }}
+            <div class="form-text small">{{ form.technician_remarks.help_text }}</div>
+            {% if form.technician_remarks.errors %}
+              <div class="text-danger small mt-1">{{ form.technician_remarks.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ ticket.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-success fw-semibold px-4">
+              Sign &amp; Complete Repair
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

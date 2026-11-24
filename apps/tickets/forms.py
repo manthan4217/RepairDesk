@@ -1,11 +1,11 @@
-"""Forms for Service Ticket creation, editing, assignment, and filtering."""
+"""Forms for Service Ticket creation, editing, assignment, repair notes, and completion reports."""
 
 from django import forms
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
 from apps.customers.models import Customer, Device
-from .models import ServiceTicket
+from .models import CompletionReport, RepairUpdate, ServiceTicket
 
 User = get_user_model()
 
@@ -43,7 +43,6 @@ class TicketCreateForm(forms.ModelForm):
         device = kwargs.pop("device", None)
         super().__init__(*args, **kwargs)
 
-        # Restrict customers to active ones
         self.fields["customer"].queryset = Customer.objects.filter(is_active=True)
 
         if customer:
@@ -107,7 +106,6 @@ class TicketAssignForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Only active staff members can be assigned
         self.fields["technician"].queryset = User.objects.filter(is_active=True).order_by("display_name", "username")
 
 
@@ -142,3 +140,104 @@ class TicketFilterForm(forms.Form):
         ],
         widget=forms.Select(attrs={"class": "form-select"}),
     )
+
+
+class RepairUpdateForm(forms.ModelForm):
+    """Form to record inspection findings, diagnostic notes, or work progress."""
+
+    class Meta:
+        model = RepairUpdate
+        fields = ["update_type", "notes"]
+        widgets = {
+            "update_type": forms.Select(attrs={"class": "form-select"}),
+            "notes": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                    "placeholder": "Describe inspection findings, component tests, or progress details...",
+                }
+            ),
+        }
+
+
+class StatusTransitionForm(forms.Form):
+    """Form to transition ticket status with validation of permitted transitions and reason."""
+
+    status = forms.ChoiceField(
+        choices=[],
+        widget=forms.Select(attrs={"class": "form-select"}),
+        help_text="Select the next workflow status.",
+    )
+    reason = forms.CharField(
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "placeholder": "Reason for on-hold, cancellation, or status change (required if On Hold or Cancelled)",
+            }
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        ticket = kwargs.pop("ticket", None)
+        user = kwargs.pop("user", None)
+        super().__init__(*args, **kwargs)
+
+        if ticket:
+            allowed = ticket.ALLOWED_TRANSITIONS.get(ticket.status, [])
+            if user and user.is_administrator:
+                choices = [(s, dict(ServiceTicket.Status.choices)[s]) for s in ServiceTicket.Status.values if s != ticket.status]
+            else:
+                choices = [(s, dict(ServiceTicket.Status.choices)[s]) for s in allowed]
+            self.fields["status"].choices = choices
+
+    def clean(self):
+        cleaned_data = super().clean()
+        status = cleaned_data.get("status")
+        reason = cleaned_data.get("reason", "").strip()
+
+        if status in [ServiceTicket.Status.ON_HOLD, ServiceTicket.Status.CANCELLED] and not reason:
+            raise ValidationError({"reason": "A reason is required when placing a ticket on hold or cancelling."})
+        return cleaned_data
+
+
+class CompletionReportForm(forms.ModelForm):
+    """Form to submit the final completion report before delivery."""
+
+    class Meta:
+        model = CompletionReport
+        fields = [
+            "diagnosis_summary",
+            "work_performed",
+            "parts_replaced",
+            "technician_remarks",
+        ]
+        widgets = {
+            "diagnosis_summary": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 3,
+                    "placeholder": "Final diagnosed root cause (e.g., Shorted capacitor on 19V rail; Corrupted BIOS flash)...",
+                }
+            ),
+            "work_performed": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                    "placeholder": "Step-by-step description of repair, component replacements, thermal paste re-application, bench testing...",
+                }
+            ),
+            "parts_replaced": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g., 1x 10uF 25V MLCC capacitor, 1x Samsung PM9A1 512GB NVMe SSD",
+                }
+            ),
+            "technician_remarks": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 2,
+                    "placeholder": "Handover instructions, care tips, or warranty exclusions for the client...",
+                }
+            ),
+        }

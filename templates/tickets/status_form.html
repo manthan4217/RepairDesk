@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Update Status - {{ ticket.ticket_number }} - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="mb-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{% url 'tickets:ticket_list' %}">Tickets</a></li>
+          <li class="breadcrumb-item"><a href="{{ ticket.get_absolute_url }}">{{ ticket.ticket_number }}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Update Status</li>
+        </ol>
+      </nav>
+      <h1 class="h3 fw-bold">Update Repair Status</h1>
+      <p class="text-muted small">Ticket: <strong>{{ ticket.ticket_number }}</strong> &bull; Current Status: <span class="badge bg-secondary">{{ ticket.get_status_display }}</span></p>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-4">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {{ form.non_field_errors }}
+            </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="{{ form.status.id_for_label }}" class="form-label fw-semibold">
+              Select Next Status <span class="text-danger">*</span>
+            </label>
+            {{ form.status }}
+            <div class="form-text small">{{ form.status.help_text }}</div>
+            {% if form.status.errors %}
+              <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label for="{{ form.reason.id_for_label }}" class="form-label fw-semibold">
+              Reason / Transition Remarks
+            </label>
+            {{ form.reason }}
+            <div class="form-text small">Required if marking On Hold (e.g. waiting for spare part) or Cancelled.</div>
+            {% if form.reason.errors %}
+              <div class="text-danger small mt-1">{{ form.reason.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ ticket.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary fw-semibold px-4">
+              Update Status
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
