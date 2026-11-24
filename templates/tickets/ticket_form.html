@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-10 col-lg-8">
+    <div class="mb-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{% url 'tickets:ticket_list' %}">Tickets</a></li>
+          {% if object %}
+            <li class="breadcrumb-item"><a href="{{ object.get_absolute_url }}">{{ object.ticket_number }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit</li>
+          {% else %}
+            <li class="breadcrumb-item active" aria-current="page">New Ticket</li>
+          {% endif %}
+        </ol>
+      </nav>
+      <h1 class="h3 fw-bold">{{ page_title }}</h1>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-4">
+        <form method="post" novalidate id="ticketForm">
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {{ form.non_field_errors }}
+            </div>
+          {% endif %}
+
+          {% if not object %}
+            <div class="row g-3 mb-3">
+              <div class="col-md-6">
+                <label for="{{ form.customer.id_for_label }}" class="form-label fw-semibold">
+                  Customer <span class="text-danger">*</span>
+                </label>
+                {{ form.customer }}
+                {% if form.customer.errors %}
+                  <div class="text-danger small mt-1">{{ form.customer.errors.0 }}</div>
+                {% endif %}
+              </div>
+              <div class="col-md-6">
+                <label for="{{ form.device.id_for_label }}" class="form-label fw-semibold">
+                  Device / Equipment <span class="text-danger">*</span>
+                </label>
+                {{ form.device }}
+                <div class="form-text small" id="deviceHelpText">Select customer first to load their equipment.</div>
+                {% if form.device.errors %}
+                  <div class="text-danger small mt-1">{{ form.device.errors.0 }}</div>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label for="{{ form.priority.id_for_label }}" class="form-label fw-semibold">
+                Priority Level <span class="text-danger">*</span>
+              </label>
+              {{ form.priority }}
+              {% if form.priority.errors %}
+                <div class="text-danger small mt-1">{{ form.priority.errors.0 }}</div>
+              {% endif %}
+            </div>
+            {% if object %}
+              <div class="col-md-6">
+                <label for="{{ form.status.id_for_label }}" class="form-label fw-semibold">
+                  Ticket Status <span class="text-danger">*</span>
+                </label>
+                {{ form.status }}
+                {% if form.status.errors %}
+                  <div class="text-danger small mt-1">{{ form.status.errors.0 }}</div>
+                {% endif %}
+              </div>
+            {% endif %}
+            <div class="col-md-6">
+              <label for="{{ form.estimated_cost.id_for_label }}" class="form-label fw-semibold">
+                Estimated Cost (&#8377;)
+              </label>
+              {{ form.estimated_cost }}
+              {% if form.estimated_cost.errors %}
+                <div class="text-danger small mt-1">{{ form.estimated_cost.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label for="{{ form.issue_description.id_for_label }}" class="form-label fw-semibold">
+              Issue &amp; Problem Description <span class="text-danger">*</span>
+            </label>
+            {{ form.issue_description }}
+            <div class="form-text small">Explain reported symptoms, diagnostic findings so far, or special handling notes.</div>
+            {% if form.issue_description.errors %}
+              <div class="text-danger small mt-1">{{ form.issue_description.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{% if object %}{{ object.get_absolute_url }}{% else %}{% url 'tickets:ticket_list' %}{% endif %}" class="btn btn-outline-secondary">
+              Cancel
+            </a>
+            <button type="submit" class="btn btn-primary fw-semibold px-4">
+              {{ submit_label }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Dynamic device selector based on chosen customer
+  document.addEventListener('DOMContentLoaded', function() {
+    const customerSelect = document.getElementById('id_customer');
+    const deviceSelect = document.getElementById('id_device');
+
+    if (customerSelect && deviceSelect) {
+      customerSelect.addEventListener('change', function() {
+        const customerId = this.value;
+        if (!customerId) {
+          deviceSelect.innerHTML = '<option value="">---------</option>';
+          return;
+        }
+
+        fetch('/tickets/api/customer-devices/' + customerId + '/')
+          .then(response => response.json())
+          .then(data => {
+            deviceSelect.innerHTML = '<option value="">---------</option>';
+            if (data.devices && data.devices.length > 0) {
+              data.devices.forEach(device => {
+                const opt = document.createElement('option');
+                opt.value = device.id;
+                opt.textContent = device.label;
+                deviceSelect.appendChild(opt);
+              });
+            } else {
+              const opt = document.createElement('option');
+              opt.value = '';
+              opt.textContent = 'No equipment registered for this customer yet';
+              deviceSelect.appendChild(opt);
+            }
+          })
+          .catch(err => console.error('Error fetching customer equipment:', err));
+      });
+    }
+  });
+</script>
+{% endblock %}

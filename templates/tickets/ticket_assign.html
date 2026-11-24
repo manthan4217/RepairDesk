@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Assign Technician - {{ ticket.ticket_number }} - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="mb-3">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{% url 'tickets:ticket_list' %}">Tickets</a></li>
+          <li class="breadcrumb-item"><a href="{{ ticket.get_absolute_url }}">{{ ticket.ticket_number }}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Assign Technician</li>
+        </ol>
+      </nav>
+      <h1 class="h3 fw-bold">Assign Technician</h1>
+      <p class="text-muted small">Ticket: <strong>{{ ticket.ticket_number }}</strong> &bull; {{ ticket.device.brand }} {{ ticket.device.model }} ({{ ticket.customer.name }})</p>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-4">
+        {% if ticket.assigned_technician %}
+          <div class="alert alert-info d-flex align-items-center mb-4">
+            <div>
+              Currently assigned to: <strong>{{ ticket.assigned_technician.display_name|default:ticket.assigned_technician.username }}</strong>
+            </div>
+          </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {{ form.non_field_errors }}
+            </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="{{ form.technician.id_for_label }}" class="form-label fw-semibold">
+              Select Active Technician <span class="text-danger">*</span>
+            </label>
+            {{ form.technician }}
+            <div class="form-text small">{{ form.technician.help_text }}</div>
+            {% if form.technician.errors %}
+              <div class="text-danger small mt-1">{{ form.technician.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label for="{{ form.notes.id_for_label }}" class="form-label fw-semibold">Assignment Notes / Instructions</label>
+            {{ form.notes }}
+            <div class="form-text small">Add any priority directions, customer deadline, or specific work notes.</div>
+            {% if form.notes.errors %}
+              <div class="text-danger small mt-1">{{ form.notes.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center">
+            <a href="{{ ticket.get_absolute_url }}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary fw-semibold px-4">
+              Confirm Assignment
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

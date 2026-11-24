@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Ticket {{ ticket.ticket_number }} - RepairDesk{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'tickets:ticket_list' %}">Tickets</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ ticket.ticket_number }}</li>
+    </ol>
+  </nav>
+
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+    <div>
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <h1 class="h3 fw-bold mb-0">{{ ticket.ticket_number }}</h1>
+        {% if ticket.priority == 'urgent' %}
+          <span class="badge bg-danger">Urgent Priority</span>
+        {% elif ticket.priority == 'high' %}
+          <span class="badge bg-warning text-dark">High Priority</span>
+        {% elif ticket.priority == 'normal' %}
+          <span class="badge bg-primary-subtle text-primary">Normal</span>
+        {% else %}
+          <span class="badge bg-secondary-subtle text-secondary">Low</span>
+        {% endif %}
+
+        {% if ticket.status == 'received' %}
+          <span class="badge bg-info-subtle text-dark border">Received</span>
+        {% elif ticket.status == 'under_diagnosis' %}
+          <span class="badge bg-primary text-white">Under Diagnosis</span>
+        {% elif ticket.status == 'in_progress' %}
+          <span class="badge bg-warning text-dark">In Progress</span>
+        {% elif ticket.status == 'completed' %}
+          <span class="badge bg-success">Completed</span>
+        {% elif ticket.status == 'ready_for_delivery' %}
+          <span class="badge bg-success-subtle text-success border">Ready for Collection</span>
+        {% elif ticket.status == 'delivered' %}
+          <span class="badge bg-secondary">Closed / Delivered</span>
+        {% elif ticket.status == 'on_hold' %}
+          <span class="badge bg-secondary-subtle text-dark">On Hold</span>
+        {% elif ticket.status == 'cancelled' %}
+          <span class="badge bg-danger-subtle text-danger">Cancelled</span>
+        {% endif %}
+      </div>
+      <p class="text-muted small mb-0">Created on {{ ticket.created_at|date:"M d, Y h:i A" }} by {{ ticket.created_by.display_name|default:ticket.created_by.username }}</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-outline-primary">
+        {% if ticket.assigned_technician %}Reassign Job{% else %}Assign Technician{% endif %}
+      </a>
+      <a href="{% url 'tickets:ticket_update' ticket.pk %}" class="btn btn-outline-secondary">
+        Edit Ticket
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <div class="col-12 col-lg-8">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Reported Problem &amp; Work Description</h2>
+      </div>
+      <div class="card-body">
+        <div class="p-3 bg-light rounded text-dark fs-6 mb-3">
+          {{ ticket.issue_description|linebreaksbr }}
+        </div>
+        {% if ticket.estimated_cost %}
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">Estimated Repair Cost:</span>
+            <span class="fs-5 fw-bold text-success">&#8377; {{ ticket.estimated_cost }}</span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h2 class="h5 mb-0 fw-bold">Technician Assignment History ({{ assignments.count }})</h2>
+        <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-outline-primary">
+          Update Assignment
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">Technician</th>
+                <th scope="col">Assigned By</th>
+                <th scope="col">Date Assigned</th>
+                <th scope="col">Notes</th>
+                <th scope="col" class="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in assignments %}
+                <tr>
+                  <td>
+                    <span class="fw-bold">{{ item.technician.display_name|default:item.technician.username }}</span>
+                  </td>
+                  <td>
+                    <span class="text-muted small">{{ item.assigned_by.display_name|default:item.assigned_by.username }}</span>
+                  </td>
+                  <td>
+                    <span class="small">{{ item.assigned_at|date:"M d, Y h:i A" }}</span>
+                  </td>
+                  <td>
+                    <span class="small text-muted">{{ item.notes|default:"&mdash;" }}</span>
+                  </td>
+                  <td class="text-center">
+                    {% if item.is_current %}
+                      <span class="badge bg-success-subtle text-success">Current</span>
+                    {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary">Previous</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center py-4 text-muted">
+                    <p class="mb-1">This ticket has not been assigned to a technician yet.</p>
+                    <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-primary">
+                      Assign Technician Now
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Repair Updates &amp; Diagnosis Notes</h2>
+      </div>
+      <div class="card-body text-center py-4 text-muted">
+        <p class="small mb-0">Technician diagnosis notes, parts tracking, and completion reports will be connected in Phase 4.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-4">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Equipment Details</h2>
+      </div>
+      <div class="card-body">
+        <h3 class="h6 fw-bold mb-1">
+          <a href="{{ ticket.device.get_absolute_url }}" class="text-decoration-none text-dark">
+            {{ ticket.device.brand }} {{ ticket.device.model }}
+          </a>
+        </h3>
+        <span class="badge bg-light text-dark border mb-3">{{ ticket.device.get_category_display }}</span>
+
+        <div class="mb-2">
+          <span class="text-muted small d-block">Serial Number:</span>
+          <code>{{ ticket.device.serial_number|default:"Not recorded" }}</code>
+        </div>
+        <div class="mb-2">
+          <span class="text-muted small d-block">Condition at Intake:</span>
+          <span class="small">{{ ticket.device.condition_at_intake|default:"No pre-existing flaws noted" }}</span>
+        </div>
+        <div class="mb-0">
+          <span class="text-muted small d-block">Accessories Handed In:</span>
+          <span class="small">{{ ticket.device.accessories_received|default:"None" }}</span>
+        </div>
+      </div>
+      <div class="card-footer bg-white py-2">
+        <a href="{{ ticket.device.get_absolute_url }}" class="btn btn-sm btn-outline-secondary w-100">
+          View Device Record
+        </a>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Customer Information</h2>
+      </div>
+      <div class="card-body">
+        <h3 class="h6 fw-bold mb-1">
+          <a href="{{ ticket.customer.get_absolute_url }}" class="text-decoration-none text-dark">
+            {{ ticket.customer.name }}
+          </a>
+        </h3>
+        <p class="mb-2 text-muted small"><strong>Phone:</strong> {{ ticket.customer.phone }}</p>
+        {% if ticket.customer.email %}
+          <p class="mb-2 text-muted small"><strong>Email:</strong> {{ ticket.customer.email }}</p>
+        {% endif %}
+        {% if ticket.customer.address %}
+          <p class="mb-0 text-muted small"><strong>Address:</strong> {{ ticket.customer.address }}</p>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-white py-2">
+        <a href="{{ ticket.customer.get_absolute_url }}" class="btn btn-sm btn-outline-secondary w-100">
+          View Customer Profile
+        </a>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-header bg-white py-3">
+        <h2 class="h5 mb-0 fw-bold">Assigned Technician</h2>
+      </div>
+      <div class="card-body">
+        {% if ticket.assigned_technician %}
+          <div class="d-flex align-items-center gap-3">
+            <div class="avatar bg-primary text-white rounded-circle p-2 fw-bold text-center" style="width: 42px; height: 42px;">
+              {{ ticket.assigned_technician.username|make_list|first|upper }}
+            </div>
+            <div>
+              <h4 class="h6 fw-bold mb-0">{{ ticket.assigned_technician.display_name|default:ticket.assigned_technician.username }}</h4>
+              <span class="text-muted small">{{ ticket.assigned_technician.phone|default:ticket.assigned_technician.email|default:"Active Staff" }}</span>
+            </div>
+          </div>
+        {% else %}
+          <div class="text-center py-2 text-muted">
+            <p class="small mb-2 text-danger fw-semibold">No technician assigned yet.</p>
+            <a href="{% url 'tickets:ticket_assign' ticket.pk %}" class="btn btn-sm btn-primary">
+              Assign Now
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

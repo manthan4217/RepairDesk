@@ -25,12 +25,24 @@
 
     <div class="row g-3">
       <div class="col-md-6 col-lg-4">
+        <div class="card h-100 border shadow-sm border-top border-primary border-3">
+          <div class="card-body">
+            <h2 class="h5 card-title fw-bold">Service Tickets</h2>
+            <p class="card-text text-muted small">Intake new repairs, generate unique tickets, assign technicians, and track progress.</p>
+            <div class="d-flex gap-2">
+              <a class="btn btn-sm btn-primary" href="{% url 'tickets:ticket_list' %}">View Tickets</a>
+              <a class="btn btn-sm btn-outline-primary" href="{% url 'tickets:ticket_create' %}">+ New Ticket</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6 col-lg-4">
         <div class="card h-100 border shadow-sm">
           <div class="card-body">
             <h2 class="h5 card-title fw-bold">Customer Management</h2>
             <p class="card-text text-muted small">Register new clients, look up phone numbers, and inspect customer history.</p>
             <div class="d-flex gap-2">
-              <a class="btn btn-sm btn-primary" href="{% url 'customers:customer_list' %}">View Customers</a>
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'customers:customer_list' %}">Customers</a>
               <a class="btn btn-sm btn-outline-primary" href="{% url 'customers:customer_create' %}">+ Add Customer</a>
             </div>
           </div>
@@ -42,23 +54,12 @@
             <h2 class="h5 card-title fw-bold">Device Registry</h2>
             <p class="card-text text-muted small">Search intake equipment by serial number, brand, model or client ownership.</p>
             <div class="d-flex gap-2">
-              <a class="btn btn-sm btn-primary" href="{% url 'customers:device_list' %}">View Devices</a>
+              <a class="btn btn-sm btn-outline-secondary" href="{% url 'customers:device_list' %}">Devices</a>
               <a class="btn btn-sm btn-outline-primary" href="{% url 'customers:device_create' %}">+ Register Device</a>
             </div>
           </div>
         </div>
       </div>
-      {% if user.is_administrator %}
-        <div class="col-md-6 col-lg-4">
-          <div class="card h-100 border shadow-sm">
-            <div class="card-body">
-              <h2 class="h5 card-title fw-bold">Administration</h2>
-              <p class="card-text text-muted small">Manage staff users, credentials, and full database models.</p>
-              <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:index' %}">Open Django Admin</a>
-            </div>
-          </div>
-        </div>
-      {% endif %}
     </div>
   {% else %}
     <div class="p-4 bg-light rounded border mb-4">
