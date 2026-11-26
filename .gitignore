@@ -1,5 +1,8 @@
 # Secrets and local environment
-.env
+.env*
+backups/
+*.sql
+*.sql.gz
 
 # Python
 venv/

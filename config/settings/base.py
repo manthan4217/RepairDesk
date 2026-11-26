@@ -85,10 +85,16 @@ else:
                     "SET sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO'"
                 ),
             },
+            "TEST": {
+                "NAME": env("DB_TEST_NAME", default="test_repairdesk_test_db"),
+            },
+            "CONN_MAX_AGE": env.int("CONN_MAX_AGE", default=60),
+            "CONN_HEALTH_CHECKS": env.bool("CONN_HEALTH_CHECKS", default=True),
         }
     }
 
 CONN_MAX_AGE = env.int("CONN_MAX_AGE", default=60)
+CONN_HEALTH_CHECKS = env.bool("CONN_HEALTH_CHECKS", default=True)
 
 AUTH_USER_MODEL = "accounts.User"
 

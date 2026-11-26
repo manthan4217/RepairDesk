@@ -18,6 +18,18 @@ from apps.tickets.models import Attachment, ServiceTicket
 User = get_user_model()
 
 
+def _close_response_files(response):
+    """Safely closes open file handles on streaming responses without firing request_finished."""
+    if hasattr(response, "_resource_closers"):
+        for closer in response._resource_closers:
+            try:
+                closer()
+            except Exception:
+                pass
+        response._resource_closers.clear()
+        response.closed = True
+
+
 class SecurityRemediationTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
@@ -79,16 +91,20 @@ class SecurityRemediationTests(TestCase):
         # Admin access
         self.client.login(username="admin_sec", password="testpassword")
         res_admin = self.client.get(url)
-        self.assertEqual(res_admin.status_code, 200)
-        self.assertEqual(res_admin.headers.get("X-Content-Type-Options"), "nosniff")
-        res_admin.close()
+        try:
+            self.assertEqual(res_admin.status_code, 200)
+            self.assertEqual(res_admin.headers.get("X-Content-Type-Options"), "nosniff")
+        finally:
+            _close_response_files(res_admin)
 
         # Assigned tech access
         self.client.login(username="tech_assigned", password="testpassword")
         res_tech = self.client.get(url)
-        self.assertEqual(res_tech.status_code, 200)
-        self.assertEqual(res_tech.headers.get("X-Content-Type-Options"), "nosniff")
-        res_tech.close()
+        try:
+            self.assertEqual(res_tech.status_code, 200)
+            self.assertEqual(res_tech.headers.get("X-Content-Type-Options"), "nosniff")
+        finally:
+            _close_response_files(res_tech)
 
     def test_attachment_download_denied_for_unassigned_tech_and_anonymous(self):
         url = reverse("tickets:attachment_download", kwargs={"pk": self.attachment.pk})
@@ -96,15 +112,19 @@ class SecurityRemediationTests(TestCase):
         # Unassigned tech gets 403
         self.client.login(username="tech_other", password="testpassword")
         res_other = self.client.get(url)
-        self.assertEqual(res_other.status_code, 403)
-        res_other.close()
+        try:
+            self.assertEqual(res_other.status_code, 403)
+        finally:
+            _close_response_files(res_other)
 
         # Anonymous gets redirected to login
         self.client.logout()
         res_anon = self.client.get(url)
-        self.assertEqual(res_anon.status_code, 302)
-        self.assertIn("/accounts/login/", res_anon.url)
-        res_anon.close()
+        try:
+            self.assertEqual(res_anon.status_code, 302)
+            self.assertIn("/accounts/login/", res_anon.url)
+        finally:
+            _close_response_files(res_anon)
 
     # SEC-02: Device Enumeration API RBAC
     def test_customer_devices_api_restricted_to_admin(self):

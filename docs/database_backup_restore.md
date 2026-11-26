@@ -18,14 +18,46 @@ This Standard Operating Procedure (SOP) defines the operational guidelines for e
 
 RepairDesk utilizes transactional, non-blocking logical dumps via `mysqldump`. Because all application tables utilize the InnoDB storage engine, the `--single-transaction` flag enables online backups without locking tables or interrupting active technician operations.
 
-### 2.1. Recommended Backup Command
+> [!WARNING]
+> **Never pass passwords directly on the command-line interface** (e.g. `--password="secret"` or `-psecret`). Doing so exposes credentials in system process tables (`ps aux`, `/proc/<pid>/cmdline`), shell histories, and system logs. Use **MySQL Login Paths** (`mysql_config_editor`) or isolated environment variables (`MYSQL_PWD`).
+
+### 2.1. Primary Recommended Approach: MySQL Encrypted Login Path
+
+MySQL 8.0 provides `mysql_config_editor` to store obfuscated authentication credentials in a protected `.mylogin.cnf` file (permissions `600`).
+
+1. **One-Time Setup:**
+   ```bash
+   mysql_config_editor set --login-path=repairdesk_backup \
+     --host="${DB_HOST:-127.0.0.1}" \
+     --port="${DB_PORT:-3306}" \
+     --user="${DB_USER}" \
+     --password
+   # Enter password securely when prompted.
+   ```
+
+2. **Execute Non-Blocking Backup:**
+   ```bash
+   mysqldump \
+     --login-path=repairdesk_backup \
+     --single-transaction \
+     --quick \
+     --routines \
+     --triggers \
+     --hex-blob \
+     --default-character-set=utf8mb4 \
+     "${DB_NAME:-repairdesk_db}" | gzip -9 > "repairdesk_backup_$(date +%Y%m%d_%H%M%S).sql.gz"
+   ```
+
+### 2.2. Alternative Automated Pipeline Approach: Scoped Environment Variable
+
+When running in automated CI/CD runners or container environments where interactive login paths cannot be pre-configured, pass credentials via `MYSQL_PWD` and immediately unset the variable upon completion:
 
 ```bash
+export MYSQL_PWD="${DB_PASSWORD}"
 mysqldump \
   --host="${DB_HOST:-127.0.0.1}" \
   --port="${DB_PORT:-3306}" \
   --user="${DB_USER}" \
-  --password="${DB_PASSWORD}" \
   --single-transaction \
   --quick \
   --routines \
@@ -33,9 +65,10 @@ mysqldump \
   --hex-blob \
   --default-character-set=utf8mb4 \
   "${DB_NAME:-repairdesk_db}" | gzip -9 > "repairdesk_backup_$(date +%Y%m%d_%H%M%S).sql.gz"
+unset MYSQL_PWD
 ```
 
-### 2.2. Explanation of Essential Flags
+### 2.3. Explanation of Essential Flags
 
 | Flag | Purpose |
 | :--- | :--- |
@@ -51,6 +84,34 @@ mysqldump \
 
 ### 3.1. Linux / Crontab (Daily at 02:00 AM)
 
+Create `/opt/repairdesk/scripts/backup_db.sh`:
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+BACKUP_DIR="/var/backups/repairdesk"
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+OUTPUT_FILE="${BACKUP_DIR}/repairdesk_backup_${TIMESTAMP}.sql.gz"
+
+mkdir -p "${BACKUP_DIR}"
+
+# Execute non-blocking backup using encrypted login-path or scoped MYSQL_PWD
+if mysql_config_editor print --login-path=repairdesk_backup >/dev/null 2>&1; then
+    mysqldump --login-path=repairdesk_backup \
+      --single-transaction --quick --routines --triggers --hex-blob \
+      --default-character-set=utf8mb4 "${DB_NAME:-repairdesk_db}" | gzip -9 > "${OUTPUT_FILE}"
+else
+    export MYSQL_PWD="${DB_PASSWORD}"
+    mysqldump -h "${DB_HOST:-127.0.0.1}" -P "${DB_PORT:-3306}" -u "${DB_USER}" \
+      --single-transaction --quick --routines --triggers --hex-blob \
+      --default-character-set=utf8mb4 "${DB_NAME:-repairdesk_db}" | gzip -9 > "${OUTPUT_FILE}"
+    unset MYSQL_PWD
+fi
+
+# Retain daily backups for 30 days
+find "${BACKUP_DIR}" -type f -name "repairdesk_backup_*.sql.gz" -mtime +30 -delete
+```
+
 Create `/etc/cron.d/repairdesk_backup`:
 ```cron
 0 2 * * * repairdesk /opt/repairdesk/scripts/backup_db.sh >> /var/log/repairdesk_backup.log 2>&1
@@ -60,6 +121,8 @@ Create `/etc/cron.d/repairdesk_backup`:
 
 Create `scripts\backup_database.ps1`:
 ```powershell
+# Requires 7-Zip (7z.exe) in PATH for streaming compression
+$ErrorActionPreference = "Stop"
 $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $BackupDir = "C:\Backups\RepairDesk"
 $OutputFile = "$BackupDir\repairdesk_backup_$Timestamp.sql.gz"
@@ -68,11 +131,22 @@ if (!(Test-Path $BackupDir)) {
     New-Item -ItemType Directory -Path $BackupDir -Force
 }
 
-$env:MYSQL_PWD = $env:DB_PASSWORD
-& mysqldump -h $env:DB_HOST -P $env:DB_PORT -u $env:DB_USER --single-transaction --quick --routines --triggers --hex-blob --default-character-set=utf8mb4 $env:DB_NAME | 7z a -si $OutputFile
+try {
+    # Scoped credential passing without command-line exposure
+    $env:MYSQL_PWD = $env:DB_PASSWORD
+    & mysqldump.exe -h $env:DB_HOST -P $env:DB_PORT -u $env:DB_USER `
+        --single-transaction --quick --routines --triggers --hex-blob `
+        --default-character-set=utf8mb4 $env:DB_NAME | 7z a -si $OutputFile
+}
+finally {
+    # Ensure credentials are purged from process memory
+    Remove-Item Env:\MYSQL_PWD -ErrorAction SilentlyContinue
+}
 
 # Retain backups for 30 days
-Get-ChildItem -Path $BackupDir -Filter "*.sql.gz" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } | Remove-Item -Force
+Get-ChildItem -Path $BackupDir -Filter "*.sql.gz" |
+    Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } |
+    Remove-Item -Force
 ```
 
 ---
@@ -96,7 +170,13 @@ Get-ChildItem -Path $BackupDir -Filter "*.sql.gz" | Where-Object { $_.LastWriteT
 
 3. **Restore Data Stream:**
    ```bash
-   gunzip < repairdesk_backup_YYYYMMDD_HHMMSS.sql.gz | mysql -u "${DB_USER}" -p "${DB_NAME:-repairdesk_db}"
+   # Option A: Interactive password prompt (recommended for manual disaster recovery)
+   gunzip < repairdesk_backup_YYYYMMDD_HHMMSS.sql.gz | mysql -h "${DB_HOST:-127.0.0.1}" -P "${DB_PORT:-3306}" -u "${DB_USER}" -p "${DB_NAME:-repairdesk_db}"
+
+   # Option B: Automated pipeline restore via scoped MYSQL_PWD (no command-line exposure)
+   export MYSQL_PWD="${DB_PASSWORD}"
+   gunzip < repairdesk_backup_YYYYMMDD_HHMMSS.sql.gz | mysql -h "${DB_HOST:-127.0.0.1}" -P "${DB_PORT:-3306}" -u "${DB_USER}" "${DB_NAME:-repairdesk_db}"
+   unset MYSQL_PWD
    ```
 
 4. **Verify Application Schema & Migrations:**

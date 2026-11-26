@@ -1,11 +1,13 @@
 """Models for Service Tickets, Technician Assignments, Repair Updates, and Completion Reports."""
 
 import os
+import random
+import time
 import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, MinValueValidator
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.urls import reverse
 
 from apps.customers.models import Customer, Device
@@ -164,9 +166,31 @@ class ServiceTicket(models.Model):
     def save(self, *args, **kwargs):
         if not self.ticket_number:
             from .services import generate_ticket_number
-            self.ticket_number = generate_ticket_number()
-        self.full_clean()
-        super().save(*args, **kwargs)
+            max_retries = 10
+            for attempt in range(max_retries):
+                try:
+                    with transaction.atomic():
+                        self.ticket_number = generate_ticket_number()
+                        self.full_clean()
+                        super().save(*args, **kwargs)
+                        break
+                except (IntegrityError, ValidationError) as exc:
+                    if isinstance(exc, ValidationError):
+                        msg_dict = getattr(exc, "message_dict", {})
+                        err_dict = getattr(exc, "error_dict", {})
+                        is_ticket_err = "ticket_number" in msg_dict or "ticket_number" in err_dict
+                    else:
+                        err_msg = str(exc).lower()
+                        is_ticket_err = "ticket_number" in err_msg or "duplicate entry" in err_msg or "1062" in err_msg
+
+                    if is_ticket_err and attempt < max_retries - 1:
+                        self.ticket_number = None
+                        time.sleep(0.01 * (attempt + 1) + random.uniform(0.005, 0.02))
+                        continue
+                    raise
+        else:
+            self.full_clean()
+            super().save(*args, **kwargs)
 
     def get_absolute_url(self):
         return reverse("tickets:ticket_detail", kwargs={"pk": self.pk})

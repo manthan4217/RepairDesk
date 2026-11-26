@@ -1,6 +1,15 @@
 """Production settings. Provide secrets through the process environment."""
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F403
+
+# Production database engine guard: prevent accidental SQLite initialization
+if DATABASES["default"]["ENGINE"] != "django.db.backends.mysql":
+    raise ImproperlyConfigured(
+        f"Production deployment strictly requires MySQL ('django.db.backends.mysql'). "
+        f"Configured backend '{DATABASES['default']['ENGINE']}' is not permitted in production."
+    )
 
 DEBUG = False
 SESSION_COOKIE_SECURE = True

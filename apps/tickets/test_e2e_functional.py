@@ -26,6 +26,18 @@ from apps.tickets.models import Assignment, Attachment, CompletionReport, Repair
 User = get_user_model()
 
 
+def _close_response_files(response):
+    """Safely closes open file handles on streaming responses without firing request_finished."""
+    if hasattr(response, "_resource_closers"):
+        for closer in response._resource_closers:
+            try:
+                closer()
+            except Exception:
+                pass
+        response._resource_closers.clear()
+        response.closed = True
+
+
 class EndToEndFunctionalTests(TestCase):
     def setUp(self):
         # 1. Administrator Account
@@ -612,21 +624,27 @@ class EndToEndFunctionalTests(TestCase):
 
         # 2. Download authorized for assigned tech
         res_down_tech = self.client.get(reverse("tickets:attachment_download", kwargs={"pk": attachment.pk}))
-        self.assertEqual(res_down_tech.status_code, 200)
-        self.assertEqual(res_down_tech.headers.get("X-Content-Type-Options"), "nosniff")
-        res_down_tech.close()
+        try:
+            self.assertEqual(res_down_tech.status_code, 200)
+            self.assertEqual(res_down_tech.headers.get("X-Content-Type-Options"), "nosniff")
+        finally:
+            _close_response_files(res_down_tech)
 
         # 3. Download authorized for admin
         self.client.login(username="admin_e2e", password="AdminPassword123!")
         res_down_admin = self.client.get(reverse("tickets:attachment_download", kwargs={"pk": attachment.pk}))
-        self.assertEqual(res_down_admin.status_code, 200)
-        res_down_admin.close()
+        try:
+            self.assertEqual(res_down_admin.status_code, 200)
+        finally:
+            _close_response_files(res_down_admin)
 
         # 4. Download rejected for unassigned tech (HTTP 403)
         self.client.login(username="tech_sarah", password="TechPassword123!")
         res_down_other = self.client.get(reverse("tickets:attachment_download", kwargs={"pk": attachment.pk}))
-        self.assertEqual(res_down_other.status_code, 403)
-        res_down_other.close()
+        try:
+            self.assertEqual(res_down_other.status_code, 403)
+        finally:
+            _close_response_files(res_down_other)
 
         # 5. Delete attachment by uploader
         self.client.login(username="tech_john", password="TechPassword123!")
