@@ -9,12 +9,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env = environ.Env(
     DEBUG=(bool, False),
     ALLOWED_HOSTS=(list, []),
+    CSRF_TRUSTED_ORIGINS=(list, []),
     DB_PORT=(int, 3306),
 )
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -31,6 +33,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -61,9 +64,25 @@ ASGI_APPLICATION = "config.asgi.application"
 
 PRIMARY_DATABASE_ENGINE = "django.db.backends.mysql"
 
+DATABASE_URL = env("DATABASE_URL", default="")
 DB_ENGINE = env("DB_ENGINE", default="django.db.backends.mysql")
 
-if DB_ENGINE == "django.db.backends.sqlite3":
+if DATABASE_URL:
+    db_config = env.db_url_config(DATABASE_URL)
+    if db_config.get("ENGINE") == "django.db.backends.mysql":
+        db_config.setdefault("OPTIONS", {})
+        db_config["OPTIONS"].setdefault("charset", "utf8mb4")
+        db_config["OPTIONS"].setdefault(
+            "init_command",
+            "SET sql_mode='STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO'",
+        )
+    db_config["TEST"] = {
+        "NAME": env("DB_TEST_NAME", default="test_repairdesk_test_db"),
+    }
+    db_config["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
+    db_config["CONN_HEALTH_CHECKS"] = env.bool("CONN_HEALTH_CHECKS", default=True)
+    DATABASES = {"default": db_config}
+elif DB_ENGINE == "django.db.backends.sqlite3":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -121,6 +140,15 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
